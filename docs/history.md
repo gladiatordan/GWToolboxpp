@@ -20,6 +20,8 @@ the latest version, go to the [Home Page](./) instead.
 * [Fix] Fixed bug preventing compass drawings from other players showing up on minimap
 * [Fix] Fixed memory leak caused by the item drops feature
 * [Fix] Fixed title tracker widget showing wrong counts for some titles
+* [Fix] Fixed bug causing heroes to drop bundles when calling a target with toolbox
+* [Minor] Added Frozen Soil to spirit effects
 * [Minor] "Automatically cancel unyielding aura when re-casting" now also applies to heroes
 * [Minor] Added elite skills on world map for GW Beyond, and lots of other community amends for the elite skill locations on the world map :)
 * [New] Added free text-to-speech api https://tts.gwtoolbox.com - allows the Text-to-speech module to be used for free.
