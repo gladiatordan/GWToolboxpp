@@ -20,6 +20,7 @@
 #include <Logger.h>
 
 #include <Modules/Resources.h>
+#include <Modules/CameraUnlockModule.h>
 #include <Modules/ChatCommands.h>
 #include <Modules/ToolboxTheme.h>
 #include <Modules/ToolboxSettings.h>
@@ -526,7 +527,7 @@ namespace {
                 }
 
                 // send input to chat commands for camera movement
-                if (ChatCommands::Instance().WndProc(Message, wParam, lParam)) {
+                if (CameraUnlockModule::Instance().WndProc(Message, wParam, lParam)) {
                     return true;
                 }
             case WM_ACTIVATE:

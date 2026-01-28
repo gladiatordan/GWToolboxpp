@@ -38,6 +38,7 @@
 #include <Modules/TextToSpeechModule.h>
 #include <Modules/FpsFix.h>
 #include <Modules/GamepadModule.h>
+#include <Modules/CameraUnlockModule.h>
 
 #include <Windows/PconsWindow.h>
 #include <Windows/HotkeysWindow.h>
@@ -165,7 +166,8 @@ namespace {
         {TextToSpeechModule::Instance(), false},
         AudioSettings::Instance(),   
         FpsFix::Instance(),          
-        GamepadModule::Instance()
+        GamepadModule::Instance(),
+        CameraUnlockModule::Instance()
     };
 
     std::vector<WidgetToggle> optional_widgets = {
