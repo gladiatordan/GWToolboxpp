@@ -252,6 +252,8 @@ namespace {
         return true;
     }
 
+    bool pending_compass_hide = false;
+
     GW::UI::Frame* GetCompassFrame();
     bool EnsureCompassIsLoaded()
     {
@@ -260,8 +262,8 @@ namespace {
         if (!compass) return false;
         const auto context = (CompassContext*)GW::UI::GetFrameContext(compass);
         if (!context->compass_canvas) {
-            GW::UI::SetFrameVisible(compass, true);
-            GW::UI::TriggerFrameRedraw(compass);
+            SetWindowVisibleTmp(GW::UI::WindowID_Compass, true);
+            pending_compass_hide = true;
         }
         return context->compass_canvas;
     }
@@ -273,8 +275,16 @@ namespace {
     // Check whether the compass ought to be hidden or not depending on user settings
     bool OverrideCompassVisibility() {
         const auto frame = GetCompassFrame();
-        if (!(frame && !in_interface_settings))
+        if (!(frame && frame->IsCreated() && !in_interface_settings))
             return false;
+        const auto context = (CompassContext*)GW::UI::GetFrameContext(frame);
+        if (!(context && context->compass_canvas)) 
+            return false;
+        if (pending_compass_hide) {
+            SetWindowVisibleTmp(GW::UI::WindowID_Compass, false);
+            pending_compass_hide = false;
+        }
+
         if (hide_compass_when_minimap_draws && Minimap::IsActive()) {
             if (!(frame->IsCreated() && frame->IsVisible()))
                 return false;
@@ -328,7 +338,7 @@ namespace {
                 break;
             case GW::UI::UIMessage::kFrameMessage_0x13:
             case GW::UI::UIMessage::kRenderFrame_0x30:
-            case GW::UI::UIMessage::kRenderFrame_0x32:
+            case GW::UI::UIMessage::kFrameVisibilityChanged:
             case GW::UI::UIMessage::kSetLayout:
                 OnCompassFrame_UICallback_Ret(message, wParam, lParam);
                 compass_position_dirty = true; // Forces a recalculation
