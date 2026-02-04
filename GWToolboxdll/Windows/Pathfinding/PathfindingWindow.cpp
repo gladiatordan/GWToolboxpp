@@ -110,7 +110,7 @@ namespace {
         if (status->blocked) return;
         switch (message_id) {
             case GW::UI::UIMessage::kLoadMapContext: {
-                const auto packet = (GW::UI::UIPacket::kLoadMapContext*)wParam;
+                [[maybe_unused]] const auto packet = static_cast<GW::UI::UIPacket::kLoadMapContext*>(wParam);
                 #ifdef _DEBUG
                 // Load from map context, but also load from the DAT - save both to JSON to review and compare the data.
                 if (packet->file_name && *packet->file_name) {
