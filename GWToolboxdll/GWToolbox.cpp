@@ -287,8 +287,9 @@ namespace {
         }
 
         if (!IsValidGWCADll(gwca_dll_path, resource)) {
-            std::filesystem::remove(gwca_dll_path);
-            if (std::filesystem::exists(gwca_dll_path)) {
+            std::error_code ec;
+            std::filesystem::remove(gwca_dll_path, ec);
+            if (std::filesystem::exists(gwca_dll_path, ec)) {
                 Log::Log("[LoadGWCADll] std::filesystem::remove fail, file still exists - permission error?");
                 return nullptr;
             }
