@@ -302,13 +302,14 @@ bool PathfindingWindow::CalculatePath(const GW::GamePos& from, const GW::GamePos
         const auto milepath = GetMilepathForCurrentMap();
         if (milepath && milepath->ready()) {
             auto astr = Pathing::AStar(milepath);
-            if (!astr.m_path.ready()) {
-                Log::Log("Pathing failed; astar.m_path not ready");
-                return;
-            }
+
             const auto res = astr.Search(from, to);
             if (res != Pathing::Error::OK) {
                 Log::Error("Pathing failed; Pathing::Error code %d", res);
+                return;
+            }
+            if (!astr.m_path.ready()) {
+                Log::Log("Pathing failed; astar.m_path not ready");
                 return;
             }
             const auto& points = astr.m_path.points();
