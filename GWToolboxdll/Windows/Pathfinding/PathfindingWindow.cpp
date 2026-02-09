@@ -309,6 +309,14 @@ clock_t PathfindingWindow::CalculatePath(const GW::GamePos& from, const GW::Game
             auto astr = Pathing::AStar(milepath);
 
             const auto res = astr.Search(from, to);
+            if (res == Pathing::Error::FailedToFinializePath) {
+                // Path route is blocked; this is a valid result.
+                Resources::EnqueueMainTask([callback, args] {
+                    std::vector<GW::GamePos> empty_vec = {};
+                    callback(empty_vec, args);
+                });
+                return;
+            }
             if (res != Pathing::Error::OK) {
                 Log::Error("Pathing failed; Pathing::Error code %d", res);
                 return;
