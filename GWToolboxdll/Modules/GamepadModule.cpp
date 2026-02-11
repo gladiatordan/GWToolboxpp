@@ -1,8 +1,6 @@
 #include "stdafx.h"
-
 #include <Xinput.h>
 #include "GamepadModule.h"
-#pragma comment(lib, "Xinput.lib")
 
 #include <GWCA/GWCA.h>
 #include <GWCA/Managers/MemoryMgr.h>
@@ -16,6 +14,9 @@ namespace {
     GW::Vec2f last_gamepad_cursor_pos;
     GW::Vec2f gamepad_cursor_pos_client;
     bool was_in_cursor_mode = false;
+
+    using XInputGetState_pt = DWORD(WINAPI*)(DWORD dwUserIndex, XINPUT_STATE* pState);
+    XInputGetState_pt XInputGetState_Func = nullptr;
 
     // XInput state tracking for gamepad A button
     XINPUT_STATE gamepad_states[XUSER_MAX_COUNT] = {0};
@@ -36,7 +37,8 @@ namespace {
         return true;
     }
 
-    bool noop_true(void*) {
+    bool noop_true(void*)
+    {
         return true;
     }
 } // namespace
@@ -44,6 +46,8 @@ namespace {
 void GamepadModule::Initialize()
 {
     ToolboxModule::Initialize();
+    HMODULE hXInput = GetModuleHandleA("xinput1_4.dll");
+    XInputGetState_Func = hXInput ? (XInputGetState_pt)GetProcAddress(hXInput, "XInputGetState") : nullptr;
 }
 
 bool GamepadModule::WndProc(UINT Message, WPARAM wParam, LPARAM lParam)
@@ -92,12 +96,12 @@ void GamepadModule::Update(float delta)
 
     // Check all 4 possible controllers
     for (DWORD i = 0; i < _countof(gamepad_states); i++) {
-        if (XInputGetState(i, &state) != ERROR_SUCCESS) 
+        if (!(XInputGetState_Func && XInputGetState_Func(i, &state) == ERROR_SUCCESS))
             continue;
         auto& prev_state = gamepad_states[i];
         const auto current_buttons_held = state.Gamepad.wButtons;
         const auto prev_buttons_held = prev_state.Gamepad.wButtons;
-        if (current_buttons_held == prev_buttons_held) 
+        if (current_buttons_held == prev_buttons_held)
             continue;
 
         if ((current_buttons_held & XINPUT_GAMEPAD_A) != (prev_buttons_held & XINPUT_GAMEPAD_A)) {
@@ -108,7 +112,7 @@ void GamepadModule::Update(float delta)
                     XINPUT_GAMEPAD_A_HELD = TIMER_INIT();
                 }
             }
-            else if(XINPUT_GAMEPAD_A_HELD != 0) {
+            else if (XINPUT_GAMEPAD_A_HELD != 0) {
                 // A button released, and hold timer not cancelled.
                 const LPARAM mouse_lparam = MAKELPARAM(static_cast<int>(gamepad_cursor_pos_client.x), static_cast<int>(gamepad_cursor_pos_client.y));
                 auto hwnd = GW::MemoryMgr::GetGWWindowHandle();
