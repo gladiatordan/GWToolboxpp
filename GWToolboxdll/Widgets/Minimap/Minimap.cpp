@@ -133,6 +133,10 @@ namespace {
 
     bool in_interface_settings = false;
 
+    Color color_map = 0xFF999999;
+    Color color_mapshadow = 0xFF120808;
+    Color color_mapbackground = 0;
+
     struct CompassAiControl {
         uint32_t field0_0x0;
         uint32_t field1_0x4;
@@ -609,14 +613,17 @@ MinimapRenderContext MinimapRenderContext::FromWidget(const Minimap& minimap)
 
     ctx.screen_position = {static_cast<float>(location.x), static_cast<float>(location.y)};
     ctx.size = {static_cast<float>(::size.x), static_cast<float>(::size.y)};
+    ctx.base_scale = ctx.size.x;
     ctx.translation = ::translation;
     ctx.zoom_scale = scale;
     ctx.rotation = minimap.GetMapRotation();
+
+    ctx.foreground_color = color_map;
+    ctx.background_color = color_mapbackground;
+    ctx.shadow_color = color_mapshadow;
+
     ctx.circular_map = ::circular_map;
     ctx.draw_center_marker = (::translation.x != 0 || ::translation.y != 0);
-
-    // Get background color from pmap_renderer
-    ctx.background_color = minimap.pmap_renderer.GetBackgroundColor();
 
     ctx.UpdateClippingRect();
 
@@ -969,7 +976,23 @@ void Minimap::DrawSettingsInternal()
         ImGui::TreePop();
     }
     if (ImGui::TreeNodeEx("Terrain", ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_SpanAvailWidth)) {
-        pmap_renderer.DrawSettings();
+        ImGui::SmallConfirmButton("Restore Defaults", "Are you sure?", [&](bool result, void*) {
+            if (result) {
+                color_map = 0xFF999999;
+                color_mapshadow = 0xFF120808;
+                color_mapbackground = 0x00000000;
+                pmap_renderer.Invalidate();
+            }
+        });
+        if (Colors::DrawSettingHueWheel("Map", &color_map)) {
+            pmap_renderer.Invalidate();
+        }
+        if (Colors::DrawSettingHueWheel("Shadow", &color_mapshadow)) {
+            pmap_renderer.Invalidate();
+        }
+        if (Colors::DrawSettingHueWheel("Background", &color_mapbackground)) {
+            pmap_renderer.Invalidate();
+        }
         ImGui::TreePop();
     }
     custom_renderer.DrawSettings();
@@ -1074,8 +1097,11 @@ void Minimap::LoadSettings(ToolboxIni* ini)
     key_shift_behavior = static_cast<MinimapModifierBehaviour>(ini->GetLongValue(Name(), VAR_NAME(key_shift_behavior), 3));
     key_alt_behavior = static_cast<MinimapModifierBehaviour>(ini->GetLongValue(Name(), VAR_NAME(key_alt_behavior), 4));
 
+    LOAD_COLOR(color_map);
+    LOAD_COLOR(color_mapshadow);
+    LOAD_COLOR(color_mapbackground);
+
     range_renderer.LoadSettings(ini, Name());
-    pmap_renderer.LoadSettings(ini, Name());
     agent_renderer.LoadSettings(ini, Name());
     pingslines_renderer.LoadSettings(ini, Name());
     symbols_renderer.LoadSettings(ini, Name());
@@ -1114,8 +1140,11 @@ void Minimap::SaveSettings(ToolboxIni* ini)
     SAVE_BOOL(hide_flagging_controls);
     SAVE_BOOL(hide_compass_when_minimap_draws);
 
+    SAVE_COLOR(color_map);
+    SAVE_COLOR(color_mapshadow);
+    SAVE_COLOR(color_mapbackground);
+
     range_renderer.SaveSettings(ini, Name());
-    pmap_renderer.SaveSettings(ini, Name());
     agent_renderer.SaveSettings(ini, Name());
     pingslines_renderer.SaveSettings(ini, Name());
     symbols_renderer.SaveSettings(ini, Name());
@@ -1422,10 +1451,6 @@ void Minimap::Render(IDirect3DDevice9* device, const MinimapRenderContext& conte
 
     // Use context background color (or from pmap_renderer if 0)
     auto& instance = Instance();
-    const D3DCOLOR background = context.background_color != 0
-                                    ? context.background_color
-                                    : instance.pmap_renderer.GetBackgroundColor();
-
     // Use context clipping rect instead of global
     device->SetScissorRect(&context.clipping_rect);
     device->SetRenderState(D3DRS_SCISSORTESTENABLE, true);
@@ -1441,14 +1466,16 @@ void Minimap::Render(IDirect3DDevice9* device, const MinimapRenderContext& conte
         device->SetRenderState(D3DRS_STENCILREF, 1);
         device->SetRenderState(D3DRS_STENCILFUNC, D3DCMP_ALWAYS);
         device->SetRenderState(D3DRS_STENCILPASS, D3DSTENCILOP_REPLACE);
-        FillCircle(0, 0, 5000.f, background);
+        FillCircle(0, 0, 5000.f, context.background_color);
         device->SetRenderState(D3DRS_STENCILFUNC, D3DCMP_EQUAL);
         device->SetRenderState(D3DRS_STENCILFAIL, D3DSTENCILOP_ZERO);
         device->SetRenderState(D3DRS_STENCILPASS, D3DSTENCILOP_REPLACE);
     }
     else {
-        FillRect(background, -5000.0f, -5000.0f, 10000.f, 10000.f);
+        FillRect(context.background_color, -5000.0f, -5000.0f, 10000.f, 10000.f);
     }
+
+
 
     auto translate_char = DirectX::XMMatrixTranslation(-me->pos.x, -me->pos.y, 0);
 
@@ -1464,7 +1491,7 @@ void Minimap::Render(IDirect3DDevice9* device, const MinimapRenderContext& conte
     const auto view = translate_char * rotate_char * scaleM * translationM;
     device->SetTransform(D3DTS_VIEW, reinterpret_cast<const D3DMATRIX*>(&view));
 
-    instance.pmap_renderer.Render(device);
+    instance.pmap_renderer.Render(device, context);
     instance.custom_renderer.Render(device);
 
 
@@ -1472,7 +1499,7 @@ void Minimap::Render(IDirect3DDevice9* device, const MinimapRenderContext& conte
     // Move the rings to the char position
     translate_char = DirectX::XMMatrixTranslation(me->pos.x, me->pos.y, 0);
     device->SetTransform(D3DTS_WORLD, reinterpret_cast<const D3DMATRIX*>(&translate_char));
-    const float gwinches_per_pixel = context.size.x / 5000.0f / 2.f * context.zoom_scale;
+    const float gwinches_per_pixel = context.base_scale / 5000.0f / 2.f * context.zoom_scale;
     instance.range_renderer.Render(device, gwinches_per_pixel);
     device->SetTransform(D3DTS_WORLD, &reset_world);
 

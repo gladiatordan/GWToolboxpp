@@ -26,10 +26,14 @@ struct MinimapRenderContext {
     float zoom_scale; // Zoom level (scale factor)
     float rotation; // Map rotation in radians
 
+    float base_scale = 500.f; // The size (in px) of the base scale to use before zooming. Minimap sets this to size.x
+
     // Visual options
     bool circular_map; // Whether to render as circle or square
     bool draw_center_marker; // Whether to draw center marker when panned
     D3DCOLOR background_color; // Background color (or 0 to use renderer's default)
+    D3DCOLOR foreground_color; // Foreground color (or 0 to use renderer's default)
+    D3DCOLOR shadow_color; // Drop shadow for foreground color
 
     // Clipping rectangle (calculated from screen_position and size)
     RECT clipping_rect;
