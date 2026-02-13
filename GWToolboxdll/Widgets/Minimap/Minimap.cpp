@@ -589,26 +589,22 @@ namespace {
 
     bool RepositionMinimapToCompass()
     {
-        if (!snap_to_compass)
-            return false;
+        if (!snap_to_compass) return false;
         const auto frame = GetCompassFrame();
-        if (!frame)
-            return false;
+        if (!frame) return false;
         constexpr float compass_padding = 1.05f;
         auto top_left = frame->position.GetTopLeftOnScreen(frame);
         auto bottom_right = frame->position.GetBottomRightOnScreen(frame);
 
         const auto height = (bottom_right.y - top_left.y);
         const auto diff = height - (height / compass_padding);
-
         top_left.y += diff;
         top_left.x += diff;
-        bottom_right.y -= diff;
         bottom_right.x -= diff;
+        bottom_right.y = top_left.y + (bottom_right.x - top_left.x);
 
         default_minimap_context.top_left = top_left;
         default_minimap_context.bottom_right = bottom_right;
-
         ImGui::SetWindowPos(default_minimap_context.top_left);
         ImGui::SetWindowSize(default_minimap_context.size());
         return true;
