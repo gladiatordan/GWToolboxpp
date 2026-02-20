@@ -121,7 +121,7 @@ namespace {
 
 
     clock_t send_timer = 0;
-    std::queue<std::wstring> queue{};
+    std::queue<std::string> queue{};
 
     ToolboxIni* inifile = nullptr;
 
@@ -282,7 +282,7 @@ namespace {
             pconsStr += pcon->abbrev;
         }
         if (cnt) {
-            queue.push(TextUtils::StringToWString(pconsStr));
+            queue.push(pconsStr);
         }
     }
 
@@ -338,7 +338,7 @@ namespace {
         std::string buf;
         if (!(build && BuildSkillTemplateString(build, &buf)))
             return false;
-        queue.push(TextUtils::StringToWString(buf));
+        queue.push(buf);
         if (auto_send_pcons)
             SendPcons(build);
         return true;
@@ -346,7 +346,7 @@ namespace {
 
     void Send(const TeamBuild* tbuild) {
         if (!tbuild->name.empty()) {
-            queue.push(TextUtils::StringToWString(tbuild->name));
+            queue.push(tbuild->name);
         }
         for (const auto build : tbuild->builds) {
             Send(build);
@@ -1060,7 +1060,7 @@ void BuildsWindow::Update(const float)
         if (GW::Map::GetInstanceType() != GW::Constants::InstanceType::Loading
             && GW::Agents::GetControlledCharacter()) {
             send_timer = TIMER_INIT();
-            if (!GW::Chat::SendChat(GW::Chat::CHANNEL_GROUP, queue.front().c_str()))
+            if (!GW::Chat::SendChat('#', queue.front().c_str()))
                 Log::Warning("Failed to send build message");
             queue.pop();
         }

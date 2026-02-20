@@ -320,7 +320,6 @@ const char* TBHotkey::instance_types[] = {"Any", "Outpost", "Explorable"};
 
 bool TBHotkey::Draw(Op* op, bool first, bool last)
 {
-    (first,last);
     bool hotkey_changed = false;
     const float scale = ImGui::GetIO().FontGlobalScale;
     const auto show_header_buttons = [&] {
@@ -373,22 +372,6 @@ bool TBHotkey::Draw(Op* op, bool first, bool last)
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("Move the hotkey up in the list");
             }
-        }
-        current_pos.x -= spacing;
-
-        current_pos.x -= btn_size;
-        ImGui::SetCursorPos(current_pos);
-        ImGui::Button(ICON_FA_BARS, ImVec2(btn_size, btn_size));
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Drag to reorder");
-        }
-        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoHoldToOpenOthers)) {
-            TBHotkey* self = this;
-            ImGui::SetDragDropPayload("TBHOTKEY", &self, sizeof(TBHotkey*));
-            char preview[128];
-            Description(preview, _countof(preview));
-            ImGui::TextUnformatted(preview);
-            ImGui::EndDragDropSource();
         }
         current_pos.x -= spacing;
 
@@ -815,7 +798,7 @@ void HotkeySendChat::Execute()
         Log::Flash("/%s", message);
     }
     GW::GameThread::Enqueue([&]() {
-        GW::Chat::SendChat(GW::Chat::GetChannel(channel), TextUtils::StringToWString(message).c_str());
+        GW::Chat::SendChat(channel, message);
     });
 }
 
@@ -1574,11 +1557,11 @@ void HotkeyAction::Execute()
             }
             break;
         case ReapplyTitle: {
-            GW::Chat::SendChat(GW::Chat::CHANNEL_EMOTE, L"title");
+            GW::Chat::SendChat('/', L"title");
             break;
         }
         case EnterChallenge:
-            GW::Chat::SendChat(GW::Chat::CHANNEL_EMOTE, L"enter");
+            GW::Chat::SendChat('/', L"enter");
             break;
     }
 }
@@ -1665,7 +1648,7 @@ void HotkeyTarget::Execute()
             return;
     }
     GW::GameThread::Enqueue([message] {
-        GW::Chat::SendChat(GW::Chat::CHANNEL_EMOTE, message);
+        GW::Chat::SendChat('/', message);
         delete[] message;
     });
 
@@ -1814,15 +1797,15 @@ void HotkeyDialog::Execute()
     if (!CanUse()) {
         return;
     }
-    wchar_t buf[32];
+    char buf[32];
     if (id == 0) {
-        swprintf(buf, _countof(buf), L"dialog take");
+        snprintf(buf, _countof(buf), "dialog take");
     }
     else {
-        swprintf(buf, _countof(buf), L"dialog 0x%X", id);
+        snprintf(buf, _countof(buf), "dialog 0x%X", id);
     }
 
-    GW::Chat::SendChat(GW::Chat::CHANNEL_EMOTE, buf);
+    GW::Chat::SendChat('/', buf);
     if (show_message_in_emote_channel) {
         Log::Flash("Sent dialog %s (%d)", name, id);
     }
