@@ -536,6 +536,18 @@ public:
         return GetOrCacheMaxHP(agent_id);
     }
 
+    // Get cached energy for an agent (returns 0 if not cached)
+    uint32_t GetCachedEnergy(uint32_t agent_id) const {
+        auto it = agent_cur_energy_cache.find(agent_id);
+        return (it != agent_cur_energy_cache.end()) ? it->second : 0;
+    }
+
+    // Get cached max energy for an agent (returns 0 if not cached)
+    uint32_t GetCachedMaxEnergy(uint32_t agent_id) const {
+        auto it = agent_max_energy_cache.find(agent_id);
+        return (it != agent_max_energy_cache.end()) ? it->second : 0;
+    }
+
     bool match_finished = false;
     uint32_t winning_party_id = NO_PARTY;
     std::chrono::milliseconds match_duration_ms_total{};
@@ -608,6 +620,11 @@ private:
     // Cache for agent max HP (used for damage calculation in observer mode)
     // Populated opportunistically whenever we observe an agent
     std::unordered_map<uint32_t, uint32_t> agent_max_hp_cache = {};
+    
+    // Cache for agent current and max energy
+    // Populated opportunistically whenever we observe an agent
+    std::unordered_map<uint32_t, uint32_t> agent_cur_energy_cache = {};
+    std::unordered_map<uint32_t, uint32_t> agent_max_energy_cache = {};
 
     static uint32_t JumboMessageValueToPartyId(uint32_t value);
     static void HandleMoraleBoost(ObservableParty* boosting_party);

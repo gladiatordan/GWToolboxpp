@@ -194,6 +194,29 @@ void ObserverPlayerWindow::Draw(IDirect3DDevice9*)
     if (tracking) {
         ImGui::Text(tracking->DisplayName().c_str());
 
+        // Display health and energy information if available
+        const GW::Agent* agent = GW::Agents::GetAgentByID(tracking_agent_id);
+        if (agent) {
+            const GW::AgentLiving* living = agent->GetAsAgentLiving();
+            if (living) {
+                // Get max HP (from cache or direct if observed)
+                uint32_t max_hp = om.GetCachedMaxHP(tracking_agent_id);
+                
+                // Calculate current HP from percentage
+                uint32_t cur_hp = static_cast<uint32_t>(living->hp * max_hp);
+                
+                ImGui::Text(("HP: "s + std::to_string(cur_hp) + " / " + std::to_string(max_hp)).c_str());
+                
+                // Get energy from cache (will be 0 if never observed)
+                uint32_t cur_energy = om.GetCachedEnergy(tracking_agent_id);
+                uint32_t max_energy = om.GetCachedMaxEnergy(tracking_agent_id);
+                
+                if (max_energy > 0) {
+                    ImGui::Text(("Energy: "s + std::to_string(cur_energy) + " / " + std::to_string(max_energy)).c_str());
+                }
+            }
+        }
+
         const float global = ImGui::GetIO().FontGlobalScale;
         text_long = 220.0f * global;
         text_medium = 150.0f * global;
@@ -239,10 +262,10 @@ void ObserverPlayerWindow::Draw(IDirect3DDevice9*)
                 
                 // Categorize agents
                 for (const auto& agent_id : all_agent_ids) {
-                    ObserverModule::ObservableAgent* agent = om.GetObservableAgentById(agent_id);
-                    if (!agent) continue;
+                    ObserverModule::ObservableAgent* categorized_agent = om.GetObservableAgentById(agent_id);
+                    if (!categorized_agent) continue;
                     
-                    if (agent->party_id == tracking_party_id) {
+                    if (categorized_agent->party_id == tracking_party_id) {
                         ally_agent_ids.insert(agent_id);
                     } else {
                         opponent_agent_ids.insert(agent_id);
@@ -263,11 +286,11 @@ void ObserverPlayerWindow::Draw(IDirect3DDevice9*)
                     ImGui::Separator();
                     
                     for (const auto& agent_id : ally_agent_ids) {
-                        ObserverModule::ObservableAgent* agent = om.GetObservableAgentById(agent_id);
-                        if (!agent) continue;
+                        ObserverModule::ObservableAgent* ally_agent = om.GetObservableAgentById(agent_id);
+                        if (!ally_agent) continue;
                         
                         offset = 0;
-                        ImGui::Text(agent->DisplayName().c_str());
+                        ImGui::Text(ally_agent->DisplayName().c_str());
                         ImGui::SameLine(offset += text_long);
                         
                         // Healing dealt
@@ -303,11 +326,11 @@ void ObserverPlayerWindow::Draw(IDirect3DDevice9*)
                     ImGui::Separator();
                     
                     for (const auto& agent_id : opponent_agent_ids) {
-                        ObserverModule::ObservableAgent* agent = om.GetObservableAgentById(agent_id);
-                        if (!agent) continue;
+                        ObserverModule::ObservableAgent* opponent_agent = om.GetObservableAgentById(agent_id);
+                        if (!opponent_agent) continue;
                         
                         offset = 0;
-                        ImGui::Text(agent->DisplayName().c_str());
+                        ImGui::Text(opponent_agent->DisplayName().c_str());
                         ImGui::SameLine(offset += text_long);
                         
                         // Damage dealt

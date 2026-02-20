@@ -8,11 +8,14 @@
 #include <GWCA/GameEntities/Player.h>
 #include <GWCA/GameEntities/Skill.h>
 
+#include <GWCA/Packets/StoC.h>
+
 #include <GWCA/Managers/MapMgr.h>
 #include <GWCA/Managers/SkillbarMgr.h>
 #include <GWCA/Managers/StoCMgr.h>
 #include <GWCA/Managers/AgentMgr.h>
 #include <GWCA/Managers/GuildMgr.h>
+#include <GWCA/Managers/ChatMgr.h>
 #include <GWCA/Managers/UIMgr.h>
 
 #include <GWToolbox.h>
@@ -63,47 +66,6 @@ namespace ObserverLabel {
 }; // namespace ObserverLabels
 
 
-// TODO: replace with values from GWCA
-namespace JumboMessageType {
-    constexpr uint8_t BASE_UNDER_ATTACK = 0;
-    constexpr uint8_t GUILD_LORD_UNDER_ATTACK = 1;
-    constexpr uint8_t CAPTURED_SHRINE = 3;
-    constexpr uint8_t CAPTURED_TOWER = 5;
-    constexpr uint8_t PARTY_DEFEATED = 6; // received in 3-way Heroes Ascent matches when one party is defeated
-    constexpr uint8_t MORALE_BOOST = 9;
-    constexpr uint8_t VICTORY = 16;
-    constexpr uint8_t FLAWLESS_VICTORY = 17;
-}
-
-
-namespace JumboMessageValue {
-    // The following values represent the first and second parties in an explorable areas
-    // (inc. observer mode) with 2 parties.
-    // if there are 3 parties in the explorable area (like some HA maps) then:
-    //  - party 1 = 6579558
-    //  - party 2 = 1635021873
-    //  - party 3 = 1635021874
-
-    // TODO:
-    // These numbers appear big and random, their origin or relation to other values
-    // is not understood.
-    // In addition, there may be a danger these variables could change with GW updates...
-    // Consider these values as experimental and use with caution
-    constexpr uint32_t PARTY_ONE = 1635021873;
-    constexpr uint32_t PARTY_TWO = 1635021874;
-}
-
-// JumboMessage represents a message strewn across the center of the screen in
-// big red/green characters.
-// Things like moral boosts, flag captures, victory, defeat...
-struct JumboMessage : GW::Packet::StoC::Packet<JumboMessage> {
-    uint8_t type{};   // JumboMessageType
-    uint32_t value{}; // JumboMessageValue
-};
-
-const uint32_t GW::Packet::StoC::Packet<JumboMessage>::STATIC_HEADER = 0x18F; // 399
-
-
 void ObserverModule::Initialize()
 {
     ToolboxModule::Initialize();
@@ -116,8 +78,9 @@ void ObserverModule::Initialize()
             HandleInstanceLoadInfo(status, packet);
         });
 
-    GW::StoC::RegisterPacketCallback<JumboMessage>(
-        &JumboMessage_Entry, [this](const GW::HookStatus*, const JumboMessage* packet) -> void {
+    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::JumboMessage>(
+        &JumboMessage_Entry, [this](const GW::HookStatus*, const GW::Packet::StoC::JumboMessage* packet) -> void {
+
             if (!IsActive()) {
                 return;
             }
@@ -133,7 +96,7 @@ void ObserverModule::Initialize()
                 return;
             }
             if (!InitializeObserverSession()) {
-                return;
+                return; 
             }
             HandleAgentState(packet->agent_id, packet->state);
         });
@@ -283,13 +246,15 @@ void ObserverModule::HandleInstanceLoadInfo(const GW::HookStatus*, const GW::Pac
 void ObserverModule::HandleJumboMessage(const uint8_t type, const uint32_t value)
 {
     switch (type) {
-        case JumboMessageType::MORALE_BOOST:
+        case GW::Packet::StoC::JumboMessageType::MORALE_BOOST:
             HandleMoraleBoost(GetObservablePartyById(JumboMessageValueToPartyId(value)));
             break;
-        case JumboMessageType::VICTORY:
-        case JumboMessageType::FLAWLESS_VICTORY:
-            HandleVictory(GetObservablePartyById(JumboMessageValueToPartyId(value)));
+        case GW::Packet::StoC::JumboMessageType::VICTORY:
+        case GW::Packet::StoC::JumboMessageType::FLAWLESS_VICTORY: {
+            const uint32_t party_id = JumboMessageValueToPartyId(value);
+            HandleVictory(GetObservablePartyById(party_id));
             break;
+        }
     }
 }
 
@@ -839,9 +804,9 @@ uint32_t ObserverModule::JumboMessageValueToPartyId(const uint32_t value)
 {
     // TODO: handle maps with 3 parties where the JumboMessageValue's are different
     switch (value) {
-        case JumboMessageValue::PARTY_ONE:
+        case GW::Packet::StoC::JumboMessageValue::PARTY_ONE:
             return 1;
-        case JumboMessageValue::PARTY_TWO:
+        case GW::Packet::StoC::JumboMessageValue::PARTY_TWO:
             return 2;
         default:
             return NO_PARTY;
@@ -862,10 +827,6 @@ void ObserverModule::HandleMoraleBoost(ObservableParty* boosting_party)
 // Fired when a party is victorious
 void ObserverModule::HandleVictory(ObservableParty* winning_party)
 {
-    if (!winning_party) {
-        return;
-    }
-
     // TODO: handle draws
     // There is no JumboMessage for a draw so we don't get notified of it...
 
@@ -1455,10 +1416,16 @@ void ObserverModule::Update(const float)
         if (observed_agent) {
             const GW::AgentLiving* living = observed_agent->GetAsAgentLiving();
             if (living && living->max_hp > 0 && living->max_hp < 100000) {
-                // Cache it if we don't have it yet, or if the value has changed
+                // Cache max HP if we don't have it yet, or if the value has changed
                 auto it = agent_max_hp_cache.find(observing_id);
                 if (it == agent_max_hp_cache.end() || it->second != living->max_hp) {
                     agent_max_hp_cache[observing_id] = living->max_hp;
+                }
+                
+                // Cache energy values as well
+                if (living->max_energy > 0) {
+                    agent_cur_energy_cache[observing_id] = static_cast<uint32_t>(living->energy);
+                    agent_max_energy_cache[observing_id] = living->max_energy;
                 }
             }
         }
