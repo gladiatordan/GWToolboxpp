@@ -28,6 +28,25 @@ namespace GW {
             uint32_t unk2;
             ChatMessage* messages[CHAT_LOG_LENGTH];
         };
+        namespace TextColor {
+            constexpr uint32_t ColorItemCommon = 0xFFFFFFFF;
+            constexpr uint32_t ColorItemEnhance = 0xFFA0F5F8;
+            constexpr uint32_t ColorItemUncommon = 0xFFB38AEC;
+            constexpr uint32_t ColorItemRare = 0xFFFFFD24;
+            constexpr uint32_t ColorItemUnique = 0xFF00FF00;
+            constexpr uint32_t ColorItemUniquePvp = 0xFFED1C24;
+            constexpr uint32_t ColorItemDull = 0xFFA0A0A0;
+            constexpr uint32_t ColorItemBasic = 0xFFFFFFFF;
+            constexpr uint32_t ColorItemBonus = 0xFFA0F5F8;
+            constexpr uint32_t ColorItemAssign = 0xFF6CC16D;
+            constexpr uint32_t ColorItemCustom = 0xFFA0A0A0;
+            constexpr uint32_t ColorItemRestrict = 0xFFF67D4D;
+            constexpr uint32_t ColorItemSell = 0xFFFFFF00;
+            constexpr uint32_t ColorLabel = 0xFFFFEAB8;
+            constexpr uint32_t ColorQuest = 0xFF00FF00;
+            constexpr uint32_t ColorSkillDull = 0xFFA0A0A0;
+            constexpr uint32_t ColorWarning = 0xFFED0002;
+        }
 
         enum Channel : int {
             CHANNEL_ALLIANCE = 0,

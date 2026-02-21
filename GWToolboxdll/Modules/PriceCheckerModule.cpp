@@ -33,6 +33,10 @@ namespace {
     clock_t last_request_time = request_interval * -1;
     std::unordered_map<std::string, uint32_t> prices_by_identifier;
 
+    constexpr Color text_color_default = GW::Chat::TextColor::ColorItemDull;
+    Color text_color = text_color_default;
+    bool show_prices_in_item_description = true;
+
     bool ParsePriceJson(const std::string& prices_json_str)
     {
         const json& prices_json = json::parse(prices_json_str, nullptr, false);
@@ -337,7 +341,7 @@ namespace {
 
     std::wstring PrintPrice(const uint32_t price, const char* name = nullptr)
     {
-        auto color = GW::EncStrings::ItemCommon;
+        auto color = GW::EncStrings::ItemDull;
         if (price > high_price_threshold) {
             color = GW::EncStrings::ItemRare;
         }
@@ -364,14 +368,9 @@ namespace {
         }
 
         std::wstring subject;
-        if (name && *name) {
-            subject = std::format(L"\x108\x107{}\x1", TextUtils::StringToWString(name));
-        }
-        else {
-            subject = L"\x108\x107Item price\x1";
-        }
+        subject = std::format(L"\x108\x107{}\x1", name && *name ? TextUtils::StringToWString(name) : L"Item Price");
 
-        return std::format(L"\x2\x102\x2\xA8A\x10A{}\x1\x10B{}\x10A{}\x1\x1", subject, color, currency_string);
+        return std::format(L"\x108\x107<c={}>\x1\x2\xA8A\x10A{}\x1\x10B{}\x10A{}\x1\x1\x2\x108\x107</c>\x1", text_color, subject, color, currency_string);
     }
     std::wstring PrintPrice(float price, const char* name = nullptr)
     {
@@ -386,23 +385,34 @@ namespace {
         const auto item = GW::Items::GetItemById(item_id);
         if (!item) return;
 
-        if (description.empty()) description += L"\x101";
+
 
         std::string first_item_name;
         std::string second_item_name;
         const auto price_first = GetPriceByItem(item, &first_item_name, 0);
         const auto price_second = GetPriceByItem(item, &second_item_name, 1);
+        if (!price_first && !price_second) return;
+
+        std::wstring prices_out = L"";
+
         if (price_first >= .1f) {
-            description.append(PrintPrice(price_first, first_item_name.empty() ? nullptr : first_item_name.c_str()));
+            if (!prices_out.empty()) prices_out += L"\x2\x102\x2";
+            prices_out.append(PrintPrice(price_first, first_item_name.empty() ? nullptr : first_item_name.c_str()));
         }
         if (price_second >= .1f && first_item_name != second_item_name) {
-            description.append(PrintPrice(price_second, second_item_name.empty() ? nullptr : second_item_name.c_str()));
+            if (!prices_out.empty()) prices_out += L"\x2\x102\x2";
+            prices_out.append(PrintPrice(price_second, second_item_name.empty() ? nullptr : second_item_name.c_str()));
         }
+        if (!prices_out.empty()) {
+            if (!description.empty()) description += L"\x2";
+            description += L"\x108\x107<brx>\x1\x2";
+            description += prices_out;
+        } 
     }
     std::wstring tmp_item_description;
     void OnGetItemDescription(const uint32_t item_id, uint32_t, uint32_t, uint32_t, wchar_t**, wchar_t** out_desc)
     {
-        if (!(out_desc && *out_desc)) return;
+        if (!(show_prices_in_item_description && out_desc && *out_desc)) return;
         if (*out_desc != tmp_item_description.data()) {
             tmp_item_description.assign(*out_desc);
         }
@@ -433,18 +443,36 @@ void PriceCheckerModule::SaveSettings(ToolboxIni* ini)
 {
     ToolboxModule::SaveSettings(ini);
     SAVE_FLOAT(high_price_threshold);
+    SAVE_COLOR(text_color);
+    SAVE_BOOL(show_prices_in_item_description);
 }
 
 void PriceCheckerModule::LoadSettings(ToolboxIni* ini)
 {
     ToolboxModule::SaveSettings(ini);
     LOAD_FLOAT(high_price_threshold);
+    LOAD_COLOR(text_color);
+    LOAD_BOOL(show_prices_in_item_description);
 }
 
 void PriceCheckerModule::DrawSettingsInternal()
 {
-    ImGui::SliderFloat("Price Checker high price threshold", &high_price_threshold, 100, 50000);
-    ImGui::ShowHelp("Rune and mod prices are fetched from https://kamadan.gwtoolbox.com.\nWhen an item price is found to be above this price threshold, the mod price will be gold when an item is hovered.");
+    ImGui::Checkbox("Show trader prices in item description tooltips", &show_prices_in_item_description);
+    ImGui::ShowHelp("Current rune, dye and mod prices are fetched from https://kamadan.gwtoolbox.com.");
+    if (show_prices_in_item_description) {
+        ImGui::Indent();
+        ImGui::TextUnformatted("Text color:");
+        ImGui::SameLine();
+        ImGui::ColorButtonPicker("Choose text color", &text_color);
+        ImGui::SameLine();
+        bool reset_color = false;
+        if (ImGui::ConfirmButton("Reset", &reset_color)) {
+            text_color = text_color_default;
+        }
+        ImGui::SliderFloat("High price threshold", &high_price_threshold, 100, 50000);
+        ImGui::ShowHelp("When an item price is found to be above this price threshold, the mod price will be gold when an item is hovered.");
+        ImGui::Unindent();
+    }
 }
 
 const std::unordered_map<std::string, uint32_t>& PriceCheckerModule::FetchPrices()
