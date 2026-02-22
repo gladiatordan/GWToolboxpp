@@ -103,4 +103,4 @@ All images in `resources/icons` are from www.flaticon.com
 
 ## Sponsors
 
-[![Termius Logo](./resources/termius-logo.svg)](https://termius.com) **[Termius](https://termius.com/)** provides a secure, reliable, and collaborative SSH client.
+[<img src="./assets/termius-logo.svg" alt="Termius Logo" width="130" height="30">](https://termius.com) **[Termius](https://termius.com/)** provides a secure, reliable, and collaborative SSH client.
