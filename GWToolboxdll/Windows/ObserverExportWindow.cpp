@@ -900,13 +900,13 @@ void ObserverExportWindow::LoadSettings(ToolboxIni* ini)
     ToolboxWindow::LoadSettings(ini);
     
     gwrank_api_key = ini->GetValue(Name(), "gwrank_api_key", "");
-    gwrank_endpoint = ini->GetValue(Name(), "gwrank_endpoint", "http://127.0.0.1:3000/api/v1/matches");
+    gwrank_endpoint = ini->GetValue(Name(), "gwrank_endpoint", "https://gwrank.com/api/v1/matches");
     match_type = ini->GetValue(Name(), "match_type", "");
     match_date = ini->GetValue(Name(), "match_date", "");
     mat_round = ini->GetValue(Name(), "mat_round", "");
     
     if (gwrank_endpoint.empty()) {
-        gwrank_endpoint = "http://127.0.0.1:3000/api/v1/matches";
+        gwrank_endpoint = "https://gwrank.com/api/v1/matches";
     }
     
     // Prefill match_date with current date if empty
