@@ -3,26 +3,26 @@
 #include <GWCA/Context/GameContext.h>
 #include <GWCA/Context/PartyContext.h>
 
-#include <GWCA/GameEntities/Map.h>
 #include <GWCA/GameEntities/Guild.h>
+#include <GWCA/GameEntities/Map.h>
 #include <GWCA/GameEntities/Player.h>
 #include <GWCA/GameEntities/Skill.h>
 
 #include <GWCA/Packets/StoC.h>
 
+#include <GWCA/Managers/AgentMgr.h>
+#include <GWCA/Managers/ChatMgr.h>
+#include <GWCA/Managers/GuildMgr.h>
 #include <GWCA/Managers/MapMgr.h>
 #include <GWCA/Managers/SkillbarMgr.h>
 #include <GWCA/Managers/StoCMgr.h>
-#include <GWCA/Managers/AgentMgr.h>
-#include <GWCA/Managers/GuildMgr.h>
-#include <GWCA/Managers/ChatMgr.h>
 #include <GWCA/Managers/UIMgr.h>
 
 #include <GWToolbox.h>
 #include <Utils/GuiUtils.h>
 
-#include <Modules/Resources.h>
 #include <Modules/ObserverModule.h>
+#include <Modules/Resources.h>
 
 #include <Logger.h>
 #include <Utils/TextUtils.h>
@@ -35,7 +35,7 @@ namespace {
     {
         ObserverModule::Instance().Reset();
     }
-}
+} // namespace
 
 constexpr auto INI_FILENAME = L"observerlog.ini";
 constexpr auto IniSection = "observer";
@@ -63,7 +63,7 @@ namespace ObserverLabel {
     const char* SkillsReceivedFromOtherParties = "Sk-";
     const char* SkillsUsedOnOtherParties = "Sk+";
     const char* SkillsUsed = "Sk";
-}; // namespace ObserverLabels
+}; // namespace ObserverLabel
 
 
 void ObserverModule::Initialize()
@@ -73,130 +73,113 @@ void ObserverModule::Initialize()
     is_explorable = GW::Map::GetInstanceType() == GW::Constants::InstanceType::Explorable;
     is_observer = GW::Map::GetIsObserving();
 
-    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::InstanceLoadInfo>(
-        &InstanceLoadInfo_Entry, [this](const GW::HookStatus* status, const GW::Packet::StoC::InstanceLoadInfo* packet) -> void {
-            HandleInstanceLoadInfo(status, packet);
-        });
+    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::InstanceLoadInfo>(&InstanceLoadInfo_Entry, [this](const GW::HookStatus* status, const GW::Packet::StoC::InstanceLoadInfo* packet) -> void {
+        HandleInstanceLoadInfo(status, packet);
+    });
 
-    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::JumboMessage>(
-        &JumboMessage_Entry, [this](const GW::HookStatus*, const GW::Packet::StoC::JumboMessage* packet) -> void {
-
-            if (!IsActive()) {
-                return;
-            }
-            if (!InitializeObserverSession()) {
-                return;
-            }
-            HandleJumboMessage(packet->type, packet->value);
-        });
-
-    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::AgentState>(
-        &AgentState_Entry, [this](const GW::HookStatus*, const GW::Packet::StoC::AgentState* packet) -> void {
-            if (!IsActive()) {
-                return;
-            }
-            if (!InitializeObserverSession()) {
-                return; 
-            }
-            HandleAgentState(packet->agent_id, packet->state);
-        });
-
-    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::AgentAdd>(
-        &AgentAdd_Entry,
-        [this](const GW::HookStatus*, const GW::Packet::StoC::AgentAdd* packet) -> void {
-            if (!IsActive()) {
-                return;
-            }
-            if (!InitializeObserverSession()) {
-                return;
-            }
-            HandleAgentAdd(packet->agent_id);
-        });
-
-    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::AgentProjectileLaunched>(
-        &AgentProjectileLaunched_Entry,
-        [this](const GW::HookStatus*, const GW::Packet::StoC::AgentProjectileLaunched* packet) -> void {
-            if (!IsActive()) {
-                return;
-            }
-            if (!InitializeObserverSession()) {
-                return;
-            }
-            HandleAgentProjectileLaunched(packet);
-        });
-
-    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::GenericModifier>(
-        &GenericModifier_Entry,
-        [this](const GW::HookStatus*, const GW::Packet::StoC::GenericModifier* packet) -> void {
-            if (!IsActive()) {
-                return;
-            }
-            if (!InitializeObserverSession()) {
-                return;
-            }
-
-            const uint32_t value_id = packet->type;
-            const uint32_t caster_id = packet->cause_id;
-            const uint32_t target_id = packet->target_id;
-            const float value = packet->value;
-            constexpr bool no_target = false;
-            HandleGenericPacket(value_id, caster_id, target_id, value, no_target);
+    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::JumboMessage>(&JumboMessage_Entry, [this](const GW::HookStatus*, const GW::Packet::StoC::JumboMessage* packet) -> void {
+        if (!IsActive()) {
+            return;
         }
-    );
-
-    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::GenericValueTarget>(
-        &GenericValueTarget_Entry,
-        [this](const GW::HookStatus*, const GW::Packet::StoC::GenericValueTarget* packet) -> void {
-            if (!IsActive()) {
-                return;
-            }
-            if (!InitializeObserverSession()) {
-                return;
-            }
-
-            const uint32_t value_id = packet->Value_id;
-            const uint32_t caster_id = packet->caster;
-            const uint32_t target_id = packet->target;
-            const uint32_t value = packet->value;
-            constexpr bool no_target = false;
-            HandleGenericPacket(value_id, caster_id, target_id, value, no_target);
-        });
-
-    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::GenericValue>(
-        &GenericValue_Entry,
-        [this](const GW::HookStatus*, const GW::Packet::StoC::GenericValue* packet) -> void {
-            if (!IsActive()) {
-                return;
-            }
-            if (!InitializeObserverSession()) {
-                return;
-            }
-
-            const uint32_t value_id = packet->value_id;
-            const uint32_t caster_id = packet->agent_id;
-            constexpr uint32_t target_id = NO_AGENT;
-            const uint32_t value = packet->value;
-            constexpr bool no_target = true;
-            HandleGenericPacket(value_id, caster_id, target_id, value, no_target);
-        });
-
-    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::GenericFloat>(
-        &GenericFloat_Entry, [this](const GW::HookStatus*, const GW::Packet::StoC::GenericFloat* packet) -> void {
-            if (!IsActive()) {
-                return;
-            }
-            if (!InitializeObserverSession()) {
-                return;
-            }
-
-            const uint32_t value_id = packet->type;
-            const uint32_t caster_id = packet->agent_id;
-            constexpr uint32_t target_id = NO_AGENT;
-            const float value = packet->value;
-            constexpr bool no_target = true;
-            HandleGenericPacket(value_id, caster_id, target_id, value, no_target);
+        if (!InitializeObserverSession()) {
+            return;
         }
-    );
+        HandleJumboMessage(packet->type, packet->value);
+    });
+
+    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::AgentState>(&AgentState_Entry, [this](const GW::HookStatus*, const GW::Packet::StoC::AgentState* packet) -> void {
+        if (!IsActive()) {
+            return;
+        }
+        if (!InitializeObserverSession()) {
+            return;
+        }
+        HandleAgentState(packet->agent_id, packet->state);
+    });
+
+    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::AgentAdd>(&AgentAdd_Entry, [this](const GW::HookStatus*, const GW::Packet::StoC::AgentAdd* packet) -> void {
+        if (!IsActive()) {
+            return;
+        }
+        if (!InitializeObserverSession()) {
+            return;
+        }
+        HandleAgentAdd(packet->agent_id);
+    });
+
+    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::AgentProjectileLaunched>(&AgentProjectileLaunched_Entry, [this](const GW::HookStatus*, const GW::Packet::StoC::AgentProjectileLaunched* packet) -> void {
+        if (!IsActive()) {
+            return;
+        }
+        if (!InitializeObserverSession()) {
+            return;
+        }
+        HandleAgentProjectileLaunched(packet);
+    });
+
+    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::GenericModifier>(&GenericModifier_Entry, [this](const GW::HookStatus*, const GW::Packet::StoC::GenericModifier* packet) -> void {
+        if (!IsActive()) {
+            return;
+        }
+        if (!InitializeObserverSession()) {
+            return;
+        }
+
+        const uint32_t value_id = packet->type;
+        const uint32_t caster_id = packet->cause_id;
+        const uint32_t target_id = packet->target_id;
+        const float value = packet->value;
+        constexpr bool no_target = false;
+        HandleGenericPacket(value_id, caster_id, target_id, value, no_target);
+    });
+
+    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::GenericValueTarget>(&GenericValueTarget_Entry, [this](const GW::HookStatus*, const GW::Packet::StoC::GenericValueTarget* packet) -> void {
+        if (!IsActive()) {
+            return;
+        }
+        if (!InitializeObserverSession()) {
+            return;
+        }
+
+        const uint32_t value_id = packet->Value_id;
+        const uint32_t caster_id = packet->caster;
+        const uint32_t target_id = packet->target;
+        const uint32_t value = packet->value;
+        constexpr bool no_target = false;
+        HandleGenericPacket(value_id, caster_id, target_id, value, no_target);
+    });
+
+    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::GenericValue>(&GenericValue_Entry, [this](const GW::HookStatus*, const GW::Packet::StoC::GenericValue* packet) -> void {
+        if (!IsActive()) {
+            return;
+        }
+        if (!InitializeObserverSession()) {
+            return;
+        }
+
+        const uint32_t value_id = packet->value_id;
+        const uint32_t caster_id = packet->agent_id;
+        constexpr uint32_t target_id = NO_AGENT;
+        const uint32_t value = packet->value;
+        constexpr bool no_target = true;
+        HandleGenericPacket(value_id, caster_id, target_id, value, no_target);
+    });
+
+    GW::StoC::RegisterPacketCallback<GW::Packet::StoC::GenericFloat>(&GenericFloat_Entry, [this](const GW::HookStatus*, const GW::Packet::StoC::GenericFloat* packet) -> void {
+        if (!IsActive()) {
+            return;
+        }
+        if (!InitializeObserverSession()) {
+            return;
+        }
+
+        const uint32_t value_id = packet->type;
+        const uint32_t caster_id = packet->agent_id;
+        constexpr uint32_t target_id = NO_AGENT;
+        const float value = packet->value;
+        constexpr bool no_target = true;
+        HandleGenericPacket(value_id, caster_id, target_id, value, no_target);
+    });
 
     if (IsActive() && !observer_session_initialized) {
         InitializeObserverSession();
@@ -260,8 +243,7 @@ void ObserverModule::HandleJumboMessage(const uint8_t type, const uint32_t value
 
 
 // Handle a GenericPacket of type float
-void ObserverModule::HandleGenericPacket(const uint32_t value_id, const uint32_t caster_id,
-                                         const uint32_t target_id, const float value, const bool)
+void ObserverModule::HandleGenericPacket(const uint32_t value_id, const uint32_t caster_id, const uint32_t target_id, const float value, const bool)
 {
     switch (value_id) {
         case GW::Packet::StoC::GenericValueID::damage:
@@ -276,7 +258,8 @@ void ObserverModule::HandleGenericPacket(const uint32_t value_id, const uint32_t
             // Check if it's healing (positive) or damage (negative)
             if (value >= 0) {
                 HandleHealingDone(caster_id, target_id, value);
-            } else {
+            }
+            else {
                 HandleDamageDone(caster_id, target_id, value, false);
             }
             break;
@@ -288,8 +271,7 @@ void ObserverModule::HandleGenericPacket(const uint32_t value_id, const uint32_t
 }
 
 // Handle a Generic Packet of type uint32_t
-void ObserverModule::HandleGenericPacket(const uint32_t value_id, const uint32_t caster_id,
-                                         const uint32_t target_id, const uint32_t value, const bool no_target)
+void ObserverModule::HandleGenericPacket(const uint32_t value_id, const uint32_t caster_id, const uint32_t target_id, const uint32_t value, const bool no_target)
 {
     switch (value_id) {
         case GW::Packet::StoC::GenericValueID::melee_attack_finished:
@@ -395,12 +377,49 @@ void ObserverModule::HandleGenericPacket(const uint32_t value_id, const uint32_t
 
 // Handle AgentState Packet
 // Fired when the server notifies us of an agent state change
-// Can tell us if the agent has just died
+// Can tell us if the agent has just died or been resurrected
 void ObserverModule::HandleAgentState(const uint32_t agent_id, const uint32_t state)
 {
-    // 16 = dead
-    if (state != 16) {
+    ObservableAgent* observable_agent = GetObservableAgentById(agent_id);
+    if (!observable_agent) {
         return;
+    }
+
+    ObservableParty* party = GetObservablePartyById(observable_agent->party_id);
+    
+    // 16 = dead
+    const bool is_now_dead = (state == 16);
+    
+    // Check for resurrection (was dead, now alive)
+    if (observable_agent->is_dead && !is_now_dead) {
+        const uint32_t match_time = GW::Map::GetInstanceTime();
+        
+        // Determine resurrection type
+        ResurrectionType res_type = ResurrectionType::Unknown;
+        if (observable_agent->last_resurrector != NO_AGENT) {
+            res_type = ResurrectionType::Skill;
+        } else {
+            // Check if this is a base resurrection (occurs every 2 minutes: 120000ms, 240000ms, etc.)
+            // Allow 3 second window (3000ms) around the 2-minute marks
+            const uint32_t time_in_cycle = match_time % 120000; // Time since last 2-minute mark
+            if (time_in_cycle <= 3000 || time_in_cycle >= 117000) {
+                res_type = ResurrectionType::BaseResurrection;
+            }
+        }
+        
+        observable_agent->resurrection_events.emplace_back(
+            match_time,
+            observable_agent->last_resurrector,
+            res_type
+        );
+        observable_agent->is_dead = false;
+        observable_agent->last_resurrector = NO_AGENT; // Reset resurrector
+        return; // Don't process as death
+    }
+    
+    // Check for death
+    if (!is_now_dead) {
+        return; // Not a death event
     }
 
     // don't credit kills/deaths on parties that are already defeated
@@ -410,15 +429,29 @@ void ObserverModule::HandleAgentState(const uint32_t agent_id, const uint32_t st
         return;
     }
 
-    ObservableAgent* observable_agent = GetObservableAgentById(agent_id);
-    if (!observable_agent) {
-        return;
-    }
-
-    ObservableParty* party = GetObservablePartyById(observable_agent->party_id);
     if (party && party->is_defeated) {
         return;
     }
+
+    // Record death event with timestamp and coordinates
+    const uint32_t match_time = GW::Map::GetInstanceTime();
+    const GW::Agent* agent = GW::Agents::GetAgentByID(agent_id);
+    float pos_x = 0.0f, pos_y = 0.0f;
+    if (agent) {
+        pos_x = agent->pos.x;
+        pos_y = agent->pos.y;
+    }
+    
+    observable_agent->death_events.emplace_back(
+        match_time,
+        pos_x,
+        pos_y,
+        observable_agent->last_hit_by,
+        static_cast<uint32_t>(observable_agent->last_damage_skill_id),
+        observable_agent->is_npc
+    );
+    
+    observable_agent->is_dead = true; // Mark as dead
 
     // notify the player
     observable_agent->stats.HandleDeath();
@@ -446,12 +479,12 @@ void ObserverModule::HandleAgentState(const uint32_t agent_id, const uint32_t st
 // Helper function to get or cache max HP for an agent
 // Returns 530 if unable to determine max HP
 // GWCA doesn't allow us to retrieve MAX Hp for every player, only currently observed player
-// as specified in the Agent.h structure. 
+// as specified in the Agent.h structure.
 // But every damage / heal done to an agent is sent as a percentage of the player max hp.
-// it's then necessary to capture this information to calculate the dmg / heal value. 
-// This means every damage and heal calculations are approximations of the real value, 
+// it's then necessary to capture this information to calculate the dmg / heal value.
+// This means every damage and heal calculations are approximations of the real value,
 // as the player could have switched gear (defensive set for exemple) and have more or less hp than the current max hp value
-// stored in the cache. But I can't find a better way to do it for now. 
+// stored in the cache. But I can't find a better way to do it for now.
 uint32_t ObserverModule::GetOrCacheMaxHP(const uint32_t agent_id)
 {
     const GW::Agent* agent = GW::Agents::GetAgentByID(agent_id);
@@ -475,8 +508,8 @@ uint32_t ObserverModule::GetOrCacheMaxHP(const uint32_t agent_id)
         return it->second;
     }
 
-    // Super abritrary value. 
-    // TODO: maybe have default hp per profession? 
+    // Super abritrary value.
+    // TODO: maybe have default hp per profession?
     const uint32_t default_hp = 530;
     agent_max_hp_cache[agent_id] = default_hp;
     return default_hp;
@@ -495,7 +528,7 @@ void ObserverModule::HandleDamageDone(const uint32_t caster_id, const uint32_t t
     }
 
     // Calculate actual damage amount
-    // @see GetOrCacheMaxHP to understand why we need to do that. 
+    // @see GetOrCacheMaxHP to understand why we need to do that.
     uint32_t damage_amount = 0;
     if (amount_pc < 0 && target) {
         const uint32_t max_hp = GetOrCacheMaxHP(target_id);
@@ -509,6 +542,11 @@ void ObserverModule::HandleDamageDone(const uint32_t caster_id, const uint32_t t
         GW::Constants::SkillID skill_id = NO_SKILL;
         if (caster->current_target_action && caster->current_target_action->is_skill) {
             skill_id = caster->current_target_action->skill_id;
+        }
+        
+        // Track last damage skill for death tracking
+        if (skill_id != NO_SKILL) {
+            target->last_damage_skill_id = skill_id;
         }
 
         // Update caster stats
@@ -607,7 +645,7 @@ void ObserverModule::HandleHealingDone(const uint32_t caster_id, const uint32_t 
     ObservableAgent* target = GetObservableAgentById(target_id);
 
     // Calculate actual healing amount
-    // @see GetOrCacheMaxHP to understand why we need to do that. 
+    // @see GetOrCacheMaxHP to understand why we need to do that.
     uint32_t healing_amount = 0;
     if (amount_pc > 0 && target) {
         const uint32_t max_hp = GetOrCacheMaxHP(target_id);
@@ -820,7 +858,8 @@ void ObserverModule::HandleMoraleBoost(ObservableParty* boosting_party)
     if (!boosting_party) {
         return;
     }
-    boosting_party->morale_boosts += 1;
+    const uint32_t match_time = GW::Map::GetInstanceTime();
+    boosting_party->morale_boosts.emplace_back(match_time);
 }
 
 
@@ -1227,6 +1266,25 @@ bool ObserverModule::ReduceAction(ObservableAgent* caster, const ActionStage sta
             }
         }
     }
+    
+    // Track resurrection attempts for resurrection skills
+    if (action->is_skill && stage == ActionStage::Finished && target && caster) {
+        // Common resurrection skill IDs
+        const auto skill_id = action->skill_id;
+        const bool is_resurrection_skill = 
+            skill_id == static_cast<GW::Constants::SkillID>(2) ||      // Resurrection Signet
+            skill_id == static_cast<GW::Constants::SkillID>(3436) ||   // Resurrection Signet (PvP)
+            skill_id == static_cast<GW::Constants::SkillID>(22) ||     // Resurrection Chant
+            skill_id == static_cast<GW::Constants::SkillID>(23) ||     // Rebirth
+            skill_id == static_cast<GW::Constants::SkillID>(25) ||     // Restore Life
+            skill_id == static_cast<GW::Constants::SkillID>(893) ||    // Vengeance
+            skill_id == static_cast<GW::Constants::SkillID>(926) ||    // Unyielding Aura
+            skill_id == static_cast<GW::Constants::SkillID>(1655);     // Flesh of My Flesh
+        
+        if (is_resurrection_skill) {
+            target->last_resurrector = caster->agent_id;
+        }
+    }
 
     return action_ownership_transferred;
 }
@@ -1401,13 +1459,59 @@ void ObserverModule::Update(const float)
 {
     if (!IsActive()) {
         party_sync_timer = 0;
+        health_snapshot_timer = 0;
         return;
     }
     if (TIMER_DIFF(party_sync_timer) > 1000) {
         SynchroniseParties();
         party_sync_timer = 0;
     }
-    
+
+    // Record health snapshots every 15 seconds for all tracked agents
+    if (TIMER_DIFF(health_snapshot_timer) > 15000) {
+        const uint32_t match_time = GW::Map::GetInstanceTime();
+        
+        // Calculate aggregate party health for each party
+        for (const auto& [party_id, party] : observable_parties) {
+            if (!party) continue;
+            
+            float total_hp = 0.0f;
+            uint32_t total_max_hp = 0;
+            int valid_agents = 0;
+            
+            // Sum health across all agents in this party
+            for (const auto agent_id : party->agent_ids) {
+                const GW::Agent* agent = GW::Agents::GetAgentByID(agent_id);
+                if (!agent) continue;
+                
+                const GW::AgentLiving* living = agent->GetAsAgentLiving();
+                if (!living) continue;
+                
+                const uint32_t max_hp = GetOrCacheMaxHP(agent_id);
+                if (max_hp == 0) continue;
+                
+                total_hp += living->hp * max_hp;
+                total_max_hp += max_hp;
+                valid_agents++;
+            }
+            
+            // Record aggregate party health snapshot
+            if (valid_agents > 0 && total_max_hp > 0) {
+                const float hp_percentage = total_hp / total_max_hp;
+                const uint32_t hp_value = static_cast<uint32_t>(total_hp);
+                
+                party->health_snapshots.emplace_back(
+                    match_time,
+                    hp_percentage,
+                    hp_value,
+                    total_max_hp
+                );
+            }
+        }
+        
+        health_snapshot_timer = 0;
+    }
+
     // Opportunistically cache max HP for the currently observed agent
     // This happens passively whenever you observe a player
     const uint32_t observing_id = GW::Agents::GetObservingId();
@@ -1421,7 +1525,7 @@ void ObserverModule::Update(const float)
                 if (it == agent_max_hp_cache.end() || it->second != living->max_hp) {
                     agent_max_hp_cache[observing_id] = living->max_hp;
                 }
-                
+
                 // Cache energy values as well
                 if (living->max_energy > 0) {
                     agent_cur_energy_cache[observing_id] = static_cast<uint32_t>(living->energy);
@@ -1795,7 +1899,7 @@ ObserverModule::ObservableAgentStats::~ObservableAgentStats()
     damage_dealt_to_agents.clear();
     damage_received_from_agents.clear();
     damage_by_skill.clear();
-    
+
     for (auto& [_, skill_ids] : skill_ids_damage_to_agents) {
         skill_ids.clear();
     }
@@ -1804,7 +1908,7 @@ ObserverModule::ObservableAgentStats::~ObservableAgentStats()
         skill_damage.clear();
     }
     damage_by_skill_to_agents.clear();
-    
+
     for (auto& [_, skill_ids] : skill_ids_damage_from_agents) {
         skill_ids.clear();
     }
@@ -1818,7 +1922,7 @@ ObserverModule::ObservableAgentStats::~ObservableAgentStats()
     healing_dealt_to_agents.clear();
     healing_received_from_agents.clear();
     healing_by_skill.clear();
-    
+
     for (auto& [_, skill_ids] : skill_ids_healing_to_agents) {
         skill_ids.clear();
     }
@@ -1827,7 +1931,7 @@ ObserverModule::ObservableAgentStats::~ObservableAgentStats()
         skill_healing.clear();
     }
     healing_by_skill_to_agents.clear();
-    
+
     for (auto& [_, skill_ids] : skill_ids_healing_from_agents) {
         skill_ids.clear();
     }
@@ -2170,9 +2274,7 @@ uint32_t& ObserverModule::ObservableAgentStats::LazyGetHealingFromSkillFromAgent
 
 
 // Constructor
-ObserverModule::ObservableParty::ObservableParty(ObserverModule& parent, const GW::PartyInfo& info)
-    : party_id(info.party_id)
-    , parent(parent) {}
+ObserverModule::ObservableParty::ObservableParty(ObserverModule& parent, const GW::PartyInfo& info) : party_id(info.party_id), parent(parent) {}
 
 
 // Destructor
@@ -2347,9 +2449,7 @@ bool ObserverModule::ObservableParty::SynchroniseParty()
 
 
 // Constructor
-ObserverModule::ObservableSkill::ObservableSkill(ObserverModule& parent, const GW::Skill& _gw_skill)
-    : parent(parent)
-    , gw_skill(_gw_skill)
+ObserverModule::ObservableSkill::ObservableSkill(ObserverModule& parent, const GW::Skill& _gw_skill) : parent(parent), gw_skill(_gw_skill)
 {
     skill_id = _gw_skill.skill_id;
     // initialize the name asynchronously here
@@ -2387,18 +2487,8 @@ std::string ObserverModule::ObservableSkill::DebugName()
 
 // Constructor
 ObserverModule::ObservableGuild::ObservableGuild(ObserverModule& parent, const GW::Guild& guild)
-    : parent(parent)
-    , guild_id(guild.index)
-    , key(guild.key)
-    , name(TextUtils::WStringToString(guild.name))
-    , tag(TextUtils::WStringToString(guild.tag))
-    , wrapped_tag("[" + tag + "]")
-    , rank(guild.rank)
-    , rating(guild.rating)
-    , faction(guild.faction)
-    , faction_point(guild.faction_point)
-    , qualifier_point(guild.qualifier_point)
-    , cape_trim(guild.cape.cape_trim)
+    : parent(parent), guild_id(guild.index), key(guild.key), name(TextUtils::WStringToString(guild.name)), tag(TextUtils::WStringToString(guild.tag)), wrapped_tag("[" + tag + "]"), rank(guild.rank), rating(guild.rating), faction(guild.faction),
+      faction_point(guild.faction_point), qualifier_point(guild.qualifier_point), cape_trim(guild.cape.cape_trim)
 {
     //
 }
@@ -2406,16 +2496,8 @@ ObserverModule::ObservableGuild::ObservableGuild(ObserverModule& parent, const G
 
 // Constructor
 ObserverModule::ObservableAgent::ObservableAgent(ObserverModule& parent, const GW::AgentLiving& agent_living)
-    : parent(parent)
-    , agent_id(agent_living.agent_id)
-    , login_number(agent_living.login_number)
-    , state(agent_living.model_state)
-    , guild_id(static_cast<uint32_t>(agent_living.tags->guild_id))
-    , team_id(agent_living.team_id)
-    , primary(static_cast<GW::Constants::Profession>(agent_living.primary))
-    , secondary(static_cast<GW::Constants::Profession>(agent_living.secondary))
-    , is_player(agent_living.IsPlayer())
-    , is_npc(agent_living.IsNPC())
+    : parent(parent), agent_id(agent_living.agent_id), login_number(agent_living.login_number), state(agent_living.model_state), guild_id(static_cast<uint32_t>(agent_living.tags->guild_id)), team_id(agent_living.team_id),
+      primary(static_cast<GW::Constants::Profession>(agent_living.primary)), secondary(static_cast<GW::Constants::Profession>(agent_living.secondary)), is_player(agent_living.IsPlayer()), is_npc(agent_living.IsNPC())
 {
     // async initialise the agents name now because we probably want it later
     GW::UI::AsyncDecodeStr(GW::Agents::GetAgentEncName(&agent_living), &_raw_name_w);
@@ -2545,13 +2627,7 @@ std::string ObserverModule::ObservableAgent::DebugName()
 
 // Constructor
 ObserverModule::ObservableMap::ObservableMap(const GW::AreaInfo& area_info)
-    : campaign(area_info.campaign)
-    , continent(area_info.continent)
-    , region(area_info.region)
-    , type(area_info.type)
-    , flags(area_info.flags)
-    , name_id(area_info.name_id)
-    , description_id(area_info.description_id)
+    : campaign(area_info.campaign), continent(area_info.continent), region(area_info.region), type(area_info.type), flags(area_info.flags), name_id(area_info.name_id), description_id(area_info.description_id)
 {
     // async initialise the name
     if (GW::UI::UInt32ToEncStr(area_info.name_id, name_enc, 8)) {
