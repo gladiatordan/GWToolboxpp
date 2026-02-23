@@ -104,6 +104,14 @@ void ObserverModule::Initialize()
         } else {
             // Second countdown - this is the actual match start
             match_start_instance_time = instance_time;
+            // Capture the map at match start
+            if (map && !match_start_map) {
+                const auto map_id = GW::Map::GetMapID();
+                const GW::AreaInfo* area_info = GW::Map::GetMapInfo(map_id);
+                if (area_info) {
+                    match_start_map = new ObservableMap(map_id, *area_info);
+                }
+            }
         }
     });
 
@@ -251,6 +259,12 @@ void ObserverModule::HandleJumboMessage(const uint8_t type, const uint32_t value
     switch (type) {
         case GW::Packet::StoC::JumboMessageType::MORALE_BOOST:
             HandleMoraleBoost(GetObservablePartyById(JumboMessageValueToPartyId(value)));
+            break;
+        case GW::Packet::StoC::JumboMessageType::CAPTURED_SHRINE:
+            HandleShrineCapture(GetObservablePartyById(JumboMessageValueToPartyId(value)));
+            break;
+        case GW::Packet::StoC::JumboMessageType::CAPTURED_TOWER:
+            HandleTowerCapture(GetObservablePartyById(JumboMessageValueToPartyId(value)));
             break;
         case GW::Packet::StoC::JumboMessageType::VICTORY:
         case GW::Packet::StoC::JumboMessageType::FLAWLESS_VICTORY: {
@@ -508,6 +522,27 @@ void ObserverModule::HandleAgentState(const uint32_t agent_id, const uint32_t st
 // as specified in the Agent.h structure.
 // But every damage / heal done to an agent is sent as a percentage of the player max hp.
 // it's then necessary to capture this information to calculate the dmg / heal value.
+// Get hardcoded max HP for known NPCs based on sanitized name
+uint32_t ObserverModule::GetNPCMaxHP(uint32_t agent_id)
+{
+    ObservableAgent* agent = GetObservableAgentById(agent_id);
+    if (!agent || agent->is_player) {
+        return 0;
+    }
+
+    // Get sanitized name and compare against known NPC names
+    const std::string name = agent->SanitizedName();
+    
+    if (name == "Footman" || name == "Archer" || name == "Knight" || name == "Bodyguard") {
+        return 480;
+    }
+    if (name == "Guild Lord") {
+        return 1680;
+    }
+    
+    return 0;
+}
+
 // This means every damage and heal calculations are approximations of the real value,
 // as the player could have switched gear (defensive set for exemple) and have more or less hp than the current max hp value
 // stored in the cache. But I can't find a better way to do it for now.
@@ -532,6 +567,13 @@ uint32_t ObserverModule::GetOrCacheMaxHP(const uint32_t agent_id)
     const auto it = agent_max_hp_cache.find(agent_id);
     if (it != agent_max_hp_cache.end()) {
         return it->second;
+    }
+
+    // Check for hardcoded NPC HP values
+    const uint32_t npc_hp = GetNPCMaxHP(agent_id);
+    if (npc_hp > 0) {
+        agent_max_hp_cache[agent_id] = npc_hp;
+        return npc_hp;
     }
 
     // Super abritrary value.
@@ -888,6 +930,32 @@ void ObserverModule::HandleMoraleBoost(ObservableParty* boosting_party)
     // Use time relative to match start if available, otherwise use instance time
     const uint32_t match_time = match_start_instance_time > 0 ? (instance_time - match_start_instance_time) : instance_time;
     boosting_party->morale_boosts.emplace_back(match_time);
+}
+
+
+// Fired when a party captures a shrine
+void ObserverModule::HandleShrineCapture(ObservableParty* capturing_party)
+{
+    if (!capturing_party) {
+        return;
+    }
+    const uint32_t instance_time = GW::Map::GetInstanceTime();
+    // Use time relative to match start if available, otherwise use instance time
+    const uint32_t match_time = match_start_instance_time > 0 ? (instance_time - match_start_instance_time) : instance_time;
+    capturing_party->shrine_captures.emplace_back(match_time);
+}
+
+
+// Fired when a party captures a tower
+void ObserverModule::HandleTowerCapture(ObservableParty* capturing_party)
+{
+    if (!capturing_party) {
+        return;
+    }
+    const uint32_t instance_time = GW::Map::GetInstanceTime();
+    // Use time relative to match start if available, otherwise use instance time
+    const uint32_t match_time = match_start_instance_time > 0 ? (instance_time - match_start_instance_time) : instance_time;
+    capturing_party->tower_captures.emplace_back(match_time);
 }
 
 
@@ -1340,6 +1408,11 @@ void ObserverModule::Reset()
         delete map;
         map = nullptr;
     }
+    
+    if (match_start_map) {
+        delete match_start_map;
+        match_start_map = nullptr;
+    }
 
     // clear guild info
     observable_guild_ids.clear();
@@ -1418,7 +1491,7 @@ bool ObserverModule::InitializeObserverSession()
     // initialise the map
 
     delete map;
-    map = new ObservableMap(*map_info);
+    map = new ObservableMap(GW::Map::GetMapID(), *map_info);
 
     match_finished = false;
     winning_party_id = NO_PARTY;
@@ -2673,8 +2746,8 @@ std::string ObserverModule::ObservableAgent::DebugName()
 
 
 // Constructor
-ObserverModule::ObservableMap::ObservableMap(const GW::AreaInfo& area_info)
-    : campaign(area_info.campaign), continent(area_info.continent), region(area_info.region), type(area_info.type), flags(area_info.flags), name_id(area_info.name_id), description_id(area_info.description_id)
+ObserverModule::ObservableMap::ObservableMap(const GW::Constants::MapID map_id, const GW::AreaInfo& area_info)
+    : map_id(map_id), campaign(area_info.campaign), continent(area_info.continent), region(area_info.region), type(area_info.type), flags(area_info.flags), name_id(area_info.name_id), description_id(area_info.description_id)
 {
     // async initialise the name
     if (GW::UI::UInt32ToEncStr(area_info.name_id, name_enc, 8)) {

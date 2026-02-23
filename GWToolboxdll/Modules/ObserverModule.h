@@ -83,6 +83,14 @@ public:
             : timestamp_ms(ts) {}
     };
 
+    // Capture event tracking (for shrines and towers)
+    struct CaptureEvent {
+        uint32_t timestamp_ms;      // Match time when captured
+        
+        CaptureEvent(uint32_t ts)
+            : timestamp_ms(ts) {}
+    };
+
     // Resurrection event tracking
     enum class ResurrectionType {
         Unknown,        // Unknown source
@@ -500,6 +508,8 @@ public:
         std::string display_name = "";
 
         std::vector<MoraleBoostEvent> morale_boosts;
+        std::vector<CaptureEvent> shrine_captures;
+        std::vector<CaptureEvent> tower_captures;
         bool is_victorious = false;
         bool is_defeated = false;
 
@@ -525,8 +535,9 @@ public:
     // closely rlated to GW::AreaInfo
     class ObservableMap {
     public:
-        ObservableMap(const GW::AreaInfo& area_info);
+        ObservableMap(GW::Constants::MapID map_id, const GW::AreaInfo& area_info);
 
+        GW::Constants::MapID map_id;
         GW::Constants::Campaign campaign;
         GW::Continent continent;
         GW::Region region;
@@ -618,6 +629,7 @@ public:
     uint32_t winning_party_id = NO_PARTY;
     bool first_countdown_seen = false; // Track if we've seen the initial countdown at map load
     uint32_t match_start_instance_time = 0; // Instance time when match actually started (countdown finished)
+    ObservableMap* match_start_map = nullptr; // Map when the match started (captured at second countdown)
     std::chrono::milliseconds match_duration_ms_total{};
     std::chrono::milliseconds match_duration_ms{};
     std::chrono::seconds match_duration_secs{};
@@ -686,6 +698,10 @@ private:
     // return false means action was not assigned and may need freeing by the caller
     bool ReduceAction(ObservableAgent* caster, ActionStage stage, TargetAction* new_action = nullptr);
 
+    // Get hardcoded max HP for known NPCs (e.g., GvG NPCs) based on sanitized name
+    // Returns 0 if not a known NPC type
+    uint32_t GetNPCMaxHP(uint32_t agent_id);
+
     // Cache for agent max HP (used for damage calculation in observer mode)
     // Populated opportunistically whenever we observe an agent
     std::unordered_map<uint32_t, uint32_t> agent_max_hp_cache = {};
@@ -697,6 +713,8 @@ private:
 
     static uint32_t JumboMessageValueToPartyId(uint32_t value);
     void HandleMoraleBoost(ObservableParty* boosting_party);
+    void HandleShrineCapture(ObservableParty* capturing_party);
+    void HandleTowerCapture(ObservableParty* capturing_party);
     void HandleVictory(ObservableParty* winning_party);
 
     ObservableMap* map{};

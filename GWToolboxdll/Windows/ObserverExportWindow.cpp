@@ -66,6 +66,22 @@ nlohmann::json ObserverExportWindow::ToJSON_V_0_1()
                 json_party["health_snapshots"].push_back(snapshot_json);
             }
             
+            // Shrine captures (captured shrines by this party)
+            json_party["shrine_captures"] = nlohmann::json::array();
+            for (const auto& shrine_capture : party->shrine_captures) {
+                nlohmann::json shrine_json;
+                shrine_json["timestamp_ms"] = shrine_capture.timestamp_ms;
+                json_party["shrine_captures"].push_back(shrine_json);
+            }
+            
+            // Tower captures (captured towers/flags by this party)
+            json_party["tower_captures"] = nlohmann::json::array();
+            for (const auto& tower_capture : party->tower_captures) {
+                nlohmann::json tower_json;
+                tower_json["timestamp_ms"] = tower_capture.timestamp_ms;
+                json_party["tower_captures"].push_back(tower_json);
+            }
+            
             for (const uint32_t agent_id : party->agent_ids) {
                 // parties -> party -> agents
                 ObserverModule::ObservableAgent* agent = observer_module.GetObservableAgentById(agent_id);
@@ -164,10 +180,12 @@ nlohmann::json ObserverExportWindow::ToJSON_V_1_0()
     json["match_date"] = Instance().match_date;
     json["mat_round"] = Instance().mat_round;
 
-    ObserverModule::ObservableMap* map = om.GetMap();
+    // Use the map from when the match started (if available), otherwise fall back to current map
+    ObserverModule::ObservableMap* map = om.match_start_map ? om.match_start_map : om.GetMap();
     json["map"] = nlohmann::json::value_t::null;
     if (map) {
         json["map"] = {};
+        json["map"]["map_id"] = static_cast<uint32_t>(map->map_id);
         json["map"]["name"] = map->Name();
         json["map"]["description"] = map->Description();
         json["map"]["is_pvp"] = map->GetIsPvP();
@@ -343,6 +361,22 @@ nlohmann::json ObserverExportWindow::ToJSON_V_1_0()
             nlohmann::json morale_json;
             morale_json["timestamp_ms"] = morale_boost.timestamp_ms;
             json["parties"]["by_id"][party_id_s]["morale_boosts"].push_back(morale_json);
+        }
+        
+        // Shrine capture events (with timestamps)
+        json["parties"]["by_id"][party_id_s]["shrine_captures"] = nlohmann::json::array();
+        for (const auto& shrine_capture : party->shrine_captures) {
+            nlohmann::json shrine_json;
+            shrine_json["timestamp_ms"] = shrine_capture.timestamp_ms;
+            json["parties"]["by_id"][party_id_s]["shrine_captures"].push_back(shrine_json);
+        }
+        
+        // Tower capture events (with timestamps)
+        json["parties"]["by_id"][party_id_s]["tower_captures"] = nlohmann::json::array();
+        for (const auto& tower_capture : party->tower_captures) {
+            nlohmann::json tower_json;
+            tower_json["timestamp_ms"] = tower_capture.timestamp_ms;
+            json["parties"]["by_id"][party_id_s]["tower_captures"].push_back(tower_json);
         }
         
         // Party aggregate health snapshots (recorded every 15 seconds)
