@@ -563,6 +563,12 @@ namespace GW {
         }
     }
 
+    namespace PlayerMgr {
+        bool IsMelandrusAccord() {
+            const auto c = GW::PlayerMgr::GetPlayerByID();
+            return (c->reforged_or_dhuums_flags & 0x2) != 0;
+        }
+    }
     namespace Agents {
         bool IsAgentCarryingBundle(uint32_t agent_id) {
             const auto agent = (GW::AgentLiving*)GW::Agents::GetAgentByID(agent_id);
