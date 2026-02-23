@@ -41,7 +41,7 @@ protected:
     float text_tiny = 0;
 
     std::string gwrank_api_key;
-    std::string gwrank_endpoint = "http://127.0.0.1:3000/api/v1/matches";
+    std::string gwrank_endpoint = "https://gwrank.com/api/v1/matches";
     
     std::string match_type = "";
     std::string match_date = "";
