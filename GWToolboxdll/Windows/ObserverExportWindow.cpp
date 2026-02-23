@@ -182,6 +182,7 @@ nlohmann::json ObserverExportWindow::ToJSON_V_1_0()
 
     // Use the map from when the match started (if available), otherwise fall back to current map
     ObserverModule::ObservableMap* map = om.match_start_map ? om.match_start_map : om.GetMap();
+    
     json["map"] = nlohmann::json::value_t::null;
     if (map) {
         json["map"] = {};

@@ -92,23 +92,22 @@ void ObserverModule::Initialize()
         if (!IsActive()) {
             return;
         }
-        if (!InitializeObserverSession()) {
-            return;
-        }
         
         const uint32_t instance_time = GW::Map::GetInstanceTime();
         
         if (!first_countdown_seen) {
             // First countdown at map load - reset data for new match
-            first_countdown_seen = true;
             Reset();
-            InitializeObserverSession();
+            first_countdown_seen = true;
+            if (!InitializeObserverSession(observed_map_id)) {
+                return;
+            }
         } else {
             // Second countdown - this is the actual match start
             match_start_instance_time = instance_time;
-            // Capture the map at match start
+            // Capture the map at match start - use the map from InitializeObserverSession which uses the correct map
             if (map && !match_start_map) {
-                const auto map_id = GW::Map::GetMapID();
+                const auto map_id = map->map_id;
                 const GW::AreaInfo* area_info = GW::Map::GetMapInfo(map_id);
                 if (area_info) {
                     match_start_map = new ObservableMap(map_id, *area_info);
@@ -243,11 +242,16 @@ void ObserverModule::HandleInstanceLoadInfo(const GW::HookStatus*, const GW::Pac
     is_observer = packet->is_observer;
 
     const bool is_active = IsActive();
+    
+    // Store the observed map ID (this is the actual match map in observer mode, not your physical location)
+    observed_map_id = static_cast<GW::Constants::MapID>(packet->map_id);
 
     if (is_active) {
+        // Reset countdown flag for new map
+        first_countdown_seen = false;
         // Don't call Reset() here to preserve match data for export after leaving the map
         // Users can explicitly call /observer:reset when they want to start tracking a new match
-        InitializeObserverSession();
+        InitializeObserverSession(observed_map_id);
     }
     else {
         // mark false so we initialize next time we load a session
@@ -1460,13 +1464,19 @@ void ObserverModule::Reset()
 
 // Load all known ObservableAgent's on the current map
 // Returns false if failed to initialise. True if successful
-bool ObserverModule::InitializeObserverSession()
+bool ObserverModule::InitializeObserverSession(GW::Constants::MapID map_id)
 {
     if (observer_session_initialized) {
         return true;
     }
-    // load area
-    const GW::AreaInfo* map_info = GW::Map::GetCurrentMapInfo();
+    
+    // Use provided map_id if valid (from InstanceLoadInfo packet), otherwise fall back to current map
+    if (map_id == static_cast<GW::Constants::MapID>(0)) {
+        map_id = GW::Map::GetMapID();
+    }
+    
+    // load area info for the observed map
+    const GW::AreaInfo* map_info = GW::Map::GetMapInfo(map_id);
     if (!map_info) {
         return false;
     }
@@ -1494,11 +1504,10 @@ bool ObserverModule::InitializeObserverSession()
     // initialise the map
 
     delete map;
-    map = new ObservableMap(GW::Map::GetMapID(), *map_info);
+    map = new ObservableMap(map_id, *map_info);
 
     match_finished = false;
     winning_party_id = NO_PARTY;
-    first_countdown_seen = false;
     match_start_instance_time = 0;
     match_duration_ms_total = std::chrono::milliseconds(0);
     match_duration_ms = std::chrono::milliseconds(0);

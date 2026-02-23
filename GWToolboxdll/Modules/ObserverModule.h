@@ -590,7 +590,7 @@ public:
     void SaveSettings(ToolboxIni* ini) override;
     void DrawSettingsInternal() override;
 
-    bool InitializeObserverSession();
+    bool InitializeObserverSession(GW::Constants::MapID map_id = static_cast<GW::Constants::MapID>(0));
     void Reset();
 
     ObservableGuild* GetObservableGuildById(uint32_t guild_id);
@@ -655,6 +655,7 @@ private:
     bool observer_session_initialized = false;
     bool is_observer = false;
     bool is_explorable = false;
+    GW::Constants::MapID observed_map_id = static_cast<GW::Constants::MapID>(0); // Map ID from InstanceLoadInfo packet (actual match map in observer mode)
 
     // packet handlers
 
