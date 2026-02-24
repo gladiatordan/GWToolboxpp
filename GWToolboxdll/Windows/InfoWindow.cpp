@@ -211,6 +211,7 @@ namespace {
         auto draw_advanced = [&, skill] {
             InfoField("Addr", "%p", skill);
             InfoField("Type", "%d", skill->type);
+            InfoField("Flags", "%08x", skill->special);
             short file_ids[2];
             GetIdsFromFileId(skill->icon_file_id, file_ids);
             InfoField("FileIds", "%08x %04x %04x", skill->icon_file_id, file_ids[0], file_ids[1]);

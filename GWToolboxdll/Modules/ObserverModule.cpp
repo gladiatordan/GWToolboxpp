@@ -1,12 +1,18 @@
 #include "stdafx.h"
 
+#include <GWCA/Constants/Constants.h>
+
 #include <GWCA/Context/GameContext.h>
 #include <GWCA/Context/PartyContext.h>
 
-#include <GWCA/GameEntities/Guild.h>
+
 #include <GWCA/GameEntities/Map.h>
 #include <GWCA/GameEntities/Player.h>
 #include <GWCA/GameEntities/Skill.h>
+#include <GWCA/GameEntities/Agent.h>
+#include <GWCA/GameEntities/Party.h>
+
+#include <GWCA/Utilities/Hook.h>
 
 #include <GWCA/Packets/StoC.h>
 
@@ -27,6 +33,7 @@
 #include <Logger.h>
 #include <Utils/TextUtils.h>
 #include <Utils/ToolboxUtils.h>
+
 namespace {
 
     GW::HookEntry ChatCmd_HookEntry;
@@ -35,6 +42,12 @@ namespace {
     {
         ObserverModule::Instance().Reset();
     }
+
+    bool IsResurrectionSkill(const GW::Constants::SkillID skill_id) {
+        const auto s = GW::SkillbarMgr::GetSkillConstantData(skill_id);
+        return s && s->IsResurrectionSkill();
+    }
+
 } // namespace
 
 constexpr auto INI_FILENAME = L"observerlog.ini";
@@ -1378,17 +1391,7 @@ bool ObserverModule::ReduceAction(ObservableAgent* caster, const ActionStage sta
     if (action->is_skill && target && caster) {
         // Common resurrection skill IDs
         const auto skill_id = action->skill_id;
-        const bool is_resurrection_skill = 
-            skill_id == GW::Constants::SkillID::Resurrection_Signet ||
-            skill_id == GW::Constants::SkillID::Resurrection_Chant ||
-            skill_id == GW::Constants::SkillID::Rebirth ||
-            skill_id == GW::Constants::SkillID::Restore_Life ||
-            skill_id == GW::Constants::SkillID::Vengeance ||
-            skill_id == GW::Constants::SkillID::Unyielding_Aura ||
-            skill_id == GW::Constants::SkillID::Flesh_of_My_Flesh ||
-            skill_id == GW::Constants::SkillID::Flesh_of_My_Flesh_PvP || 
-            skill_id == GW::Constants::SkillID::Death_Pact_Signet ||
-            skill_id == GW::Constants::SkillID::Death_Pact_Signet_PvP;
+        const bool is_resurrection_skill = IsResurrectionSkill(skill_id);
         
         if (is_resurrection_skill) {
             if (stage == ActionStage::Started && target->is_dead) {

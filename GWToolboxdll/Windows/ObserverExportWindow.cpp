@@ -719,23 +719,7 @@ void ObserverExportWindow::ExportToJSON(Version version)
     std::string filename;
     SYSTEMTIME time;
     GetLocalTime(&time);
-    std::string year = std::to_string(time.wYear);
-    std::string month = std::to_string(time.wMonth);
-    std::string day = std::to_string(time.wDay);
-    std::string hour = std::to_string(time.wHour);
-    std::string minute = std::to_string(time.wMinute);
-    std::string second = std::to_string(time.wSecond);
-    std::string export_time = PadLeft(year, 4, '0')
-                              + "-"
-                              + PadLeft(month, 2, '0')
-                              + "-"
-                              + PadLeft(day, 2, '0')
-                              + "T"
-                              + PadLeft(hour, 2, '0')
-                              + "-"
-                              + PadLeft(minute, 2, '0')
-                              + "-"
-                              + PadLeft(second, 2, '0');
+    std::string export_time = std::format("{:04}-{:02}-{:02}T{:02}-{:02}-{:02}", time.wYear, time.wMonth, time.wDay, time.wHour, time.wMinute, time.wSecond);
 
     switch (version) {
         case Version::V_0_1: {
@@ -757,9 +741,7 @@ void ObserverExportWindow::ExportToJSON(Version version)
             std::ranges::transform(name, name.begin(), [](const unsigned char c) {
                 return static_cast<unsigned char>(c == ' ' ? '_' : c);
             });
-            // replace non-alphanumeric with "x" to make simply FS safe, but also show something is missing
-            name = TextUtils::ctre_regex_replace<"[^A-Za-z0-9.-_]/g", "x">(name);
-            filename = export_time + "_" + name + ".json";
+            filename = TextUtils::SanitiseFilename(name) + ".json";
             json["filename"] = filename;
             break;
         }
@@ -934,11 +916,11 @@ void ObserverExportWindow::LoadSettings(ToolboxIni* ini)
 {
     ToolboxWindow::LoadSettings(ini);
     
-    gwrank_api_key = ini->GetValue(Name(), "gwrank_api_key", "");
-    gwrank_endpoint = ini->GetValue(Name(), "gwrank_endpoint", "https://gwrank.com/api/v1/matches");
-    match_type = ini->GetValue(Name(), "match_type", "");
-    match_date = ini->GetValue(Name(), "match_date", "");
-    mat_round = ini->GetValue(Name(), "mat_round", "");
+    LOAD_STRING(gwrank_api_key);
+    LOAD_STRING(gwrank_endpoint);
+    LOAD_STRING(match_type);
+    LOAD_STRING(match_date);
+    LOAD_STRING(mat_round);
     
     if (gwrank_endpoint.empty()) {
         gwrank_endpoint = "https://gwrank.com/api/v1/matches";
@@ -948,11 +930,7 @@ void ObserverExportWindow::LoadSettings(ToolboxIni* ini)
     if (match_date.empty()) {
         SYSTEMTIME time;
         GetLocalTime(&time);
-        match_date = PadLeft(std::to_string(time.wYear), 4, '0')
-                     + "-"
-                     + PadLeft(std::to_string(time.wMonth), 2, '0')
-                     + "-"
-                     + PadLeft(std::to_string(time.wDay), 2, '0');
+        match_date = std::format("{:04}-{:02}-{:02}", time.wYear, time.wMonth, time.wDay);
     }
 }
 
@@ -961,12 +939,12 @@ void ObserverExportWindow::LoadSettings(ToolboxIni* ini)
 void ObserverExportWindow::SaveSettings(ToolboxIni* ini)
 {
     ToolboxWindow::SaveSettings(ini);
-    
-    ini->SetValue(Name(), "gwrank_api_key", gwrank_api_key.c_str());
-    ini->SetValue(Name(), "gwrank_endpoint", gwrank_endpoint.c_str());
-    ini->SetValue(Name(), "match_type", match_type.c_str());
-    ini->SetValue(Name(), "match_date", match_date.c_str());
-    ini->SetValue(Name(), "mat_round", mat_round.c_str());
+
+    SAVE_STRING(gwrank_api_key);
+    SAVE_STRING(gwrank_endpoint);
+    SAVE_STRING(match_type);
+    SAVE_STRING(match_date);
+    SAVE_STRING(mat_round);
 }
 
 // Draw settings
