@@ -62,6 +62,62 @@ public:
         Interrupted // "Interrupted" is received after "Stopped"
     };
 
+    // Death event tracking
+    struct DeathEvent {
+        uint32_t timestamp_ms;      // Match time when death occurred
+        float position_x;           // X coordinate of death
+        float position_y;           // Y coordinate of death
+        uint32_t killer_agent_id;   // Agent ID of killer (if known)
+        uint32_t killing_skill_id;  // Skill ID that caused death (NO_SKILL if unknown)
+        bool is_npc;                // Whether the deceased was an NPC
+        
+        DeathEvent(uint32_t ts, float x, float y, uint32_t killer, uint32_t skill, bool npc)
+            : timestamp_ms(ts), position_x(x), position_y(y), killer_agent_id(killer), killing_skill_id(skill), is_npc(npc) {}
+    };
+
+    // Morale boost event tracking
+    struct MoraleBoostEvent {
+        uint32_t timestamp_ms;      // Match time when morale boost occurred
+        
+        MoraleBoostEvent(uint32_t ts)
+            : timestamp_ms(ts) {}
+    };
+
+    // Capture event tracking (for shrines and towers)
+    struct CaptureEvent {
+        uint32_t timestamp_ms;      // Match time when captured
+        
+        CaptureEvent(uint32_t ts)
+            : timestamp_ms(ts) {}
+    };
+
+    // Resurrection event tracking
+    enum class ResurrectionType {
+        Unknown,        // Unknown source
+        Skill,          // Player cast resurrection skill
+        BaseResurrection // Automatic base resurrection (every 2 minutes)
+    };
+    
+    struct ResurrectionEvent {
+        uint32_t timestamp_ms;      // Match time when resurrected
+        uint32_t resurrector_agent_id; // Agent ID of who resurrected (NO_AGENT if unknown)
+        ResurrectionType resurrection_type; // Type of resurrection
+        
+        ResurrectionEvent(uint32_t ts, uint32_t resurrector, ResurrectionType type)
+            : timestamp_ms(ts), resurrector_agent_id(resurrector), resurrection_type(type) {}
+    };
+
+    // Health snapshot for graphing
+    struct HealthSnapshot {
+        uint32_t timestamp_ms;      // Match time of snapshot
+        float hp_percentage;        // HP as percentage (0.0 - 1.0)
+        uint32_t hp_value;          // Actual HP value
+        uint32_t max_hp;            // Max HP at time of snapshot
+        
+        HealthSnapshot(uint32_t ts, float hp_pct, uint32_t hp, uint32_t max)
+            : timestamp_ms(ts), hp_percentage(hp_pct), hp_value(hp), max_hp(max) {}
+    };
+
     // An action between a caster and target
     // Where an action can be a skill and/or attack
     struct TargetAction {
@@ -342,6 +398,15 @@ public:
         // account for degen / npc steals / such.
         // It's a for fun stat so don't take it too serious
         uint32_t last_hit_by = NO_AGENT;
+        
+        // Track the skill that last damaged this agent (for death tracking)
+        GW::Constants::SkillID last_damage_skill_id = NO_SKILL;
+
+        // Track if agent is currently dead
+        bool is_dead = false;
+        
+        // Track who last used a resurrection skill on this agent
+        uint32_t last_resurrector = NO_AGENT;
 
         // TODO: last_hit_at to limit the kill window
 
@@ -350,6 +415,12 @@ public:
 
         // stats:
         ObservableAgentStats stats;;
+
+        // Death event (if agent died)
+        std::vector<DeathEvent> death_events;
+        
+        // Resurrection events (if agent was resurrected)
+        std::vector<ResurrectionEvent> resurrection_events;
 
         // name fns with excessive caching & lazy loading
         std::string DisplayName();
@@ -436,7 +507,9 @@ public:
         std::string name = "";
         std::string display_name = "";
 
-        uint32_t morale_boosts = 0;
+        std::vector<MoraleBoostEvent> morale_boosts;
+        std::vector<CaptureEvent> shrine_captures;
+        std::vector<CaptureEvent> tower_captures;
         bool is_victorious = false;
         bool is_defeated = false;
 
@@ -449,6 +522,9 @@ public:
         // agent_ids representing the players
         std::vector<uint32_t> agent_ids = {};
 
+        // Aggregate party health snapshots (every 15 seconds)
+        std::vector<HealthSnapshot> health_snapshots = {};
+
         std::string DebugName() const
         {
             std::string _debug_name = "(" + std::to_string(party_id) + ") " + display_name;
@@ -459,8 +535,9 @@ public:
     // closely rlated to GW::AreaInfo
     class ObservableMap {
     public:
-        ObservableMap(const GW::AreaInfo& area_info);
+        ObservableMap(GW::Constants::MapID map_id, const GW::AreaInfo& area_info);
 
+        GW::Constants::MapID map_id;
         GW::Constants::Campaign campaign;
         GW::Continent continent;
         GW::Region region;
@@ -513,7 +590,7 @@ public:
     void SaveSettings(ToolboxIni* ini) override;
     void DrawSettingsInternal() override;
 
-    bool InitializeObserverSession();
+    bool InitializeObserverSession(GW::Constants::MapID map_id = static_cast<GW::Constants::MapID>(0));
     void Reset();
 
     ObservableGuild* GetObservableGuildById(uint32_t guild_id);
@@ -550,6 +627,9 @@ public:
 
     bool match_finished = false;
     uint32_t winning_party_id = NO_PARTY;
+    bool first_countdown_seen = false; // Track if we've seen the initial countdown at map load
+    uint32_t match_start_instance_time = 0; // Instance time when match actually started (countdown finished)
+    ObservableMap* match_start_map = nullptr; // Map when the match started (captured at second countdown)
     std::chrono::milliseconds match_duration_ms_total{};
     std::chrono::milliseconds match_duration_ms{};
     std::chrono::seconds match_duration_secs{};
@@ -563,6 +643,7 @@ private:
     ObservableParty* GetObservablePartyByPartyInfo(const GW::PartyInfo& party_info);
 
     clock_t party_sync_timer = 0;
+    clock_t health_snapshot_timer = 0;
 
     // agent name settings
     bool trim_hench_names = false;
@@ -574,6 +655,7 @@ private:
     bool observer_session_initialized = false;
     bool is_observer = false;
     bool is_explorable = false;
+    GW::Constants::MapID observed_map_id = static_cast<GW::Constants::MapID>(0); // Map ID from InstanceLoadInfo packet (actual match map in observer mode)
 
     // packet handlers
 
@@ -617,6 +699,10 @@ private:
     // return false means action was not assigned and may need freeing by the caller
     bool ReduceAction(ObservableAgent* caster, ActionStage stage, TargetAction* new_action = nullptr);
 
+    // Get hardcoded max HP for known NPCs (e.g., GvG NPCs) based on sanitized name
+    // Returns 0 if not a known NPC type
+    uint32_t GetNPCMaxHP(uint32_t agent_id);
+
     // Cache for agent max HP (used for damage calculation in observer mode)
     // Populated opportunistically whenever we observe an agent
     std::unordered_map<uint32_t, uint32_t> agent_max_hp_cache = {};
@@ -627,7 +713,9 @@ private:
     std::unordered_map<uint32_t, uint32_t> agent_max_energy_cache = {};
 
     static uint32_t JumboMessageValueToPartyId(uint32_t value);
-    static void HandleMoraleBoost(ObservableParty* boosting_party);
+    void HandleMoraleBoost(ObservableParty* boosting_party);
+    void HandleShrineCapture(ObservableParty* capturing_party);
+    void HandleTowerCapture(ObservableParty* capturing_party);
     void HandleVictory(ObservableParty* winning_party);
 
     ObservableMap* map{};
@@ -653,6 +741,7 @@ private:
     // hooks
     GW::HookEntry JumboMessage_Entry;
     GW::HookEntry InstanceLoadInfo_Entry;
+    GW::HookEntry CountdownStart_Entry;
     GW::HookEntry AgentState_Entry;
     GW::HookEntry AgentAdd_Entry;
     GW::HookEntry AgentProjectileLaunched_Entry;
