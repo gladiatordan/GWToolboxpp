@@ -275,6 +275,7 @@ namespace {
     bool SetWindowVisibleTmp(GW::UI::WindowID window_id, bool visible)
     {
         auto position = GW::UI::GetWindowPosition(window_id);
+        if (!position) return false;
         auto original_position = *position;
         GW::UI::UIPacket::kUIPositionChanged packet = {window_id, position};
         if (visible) {
