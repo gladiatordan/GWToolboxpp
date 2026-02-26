@@ -474,14 +474,11 @@ namespace {
         }
     }
     bool was_loading = true;
-    bool IsLoadingScreenShown() {
-        return GW::UI::GetFrameByLabel(L"Mission") != nullptr;
-    }
 
 
 
     void OnMapLoaded() {
-        if (IsLoadingScreenShown()) return;
+        if (GW::UI::IsLoadingScreenShown()) return;
         BlockQuestSound();
         QuestModule::FetchMissingQuestInfo();
         ClearCalculatedQuestPaths();
@@ -771,7 +768,7 @@ void QuestModule::Update(float)
         return;
     }
     if (was_loading) {
-        if (IsLoadingScreenShown()) 
+        if (GW::UI::IsLoadingScreenShown()) 
             return;
         OnMapLoaded();
         was_loading = false;

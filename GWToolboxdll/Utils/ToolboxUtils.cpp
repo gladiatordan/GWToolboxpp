@@ -561,6 +561,10 @@ namespace GW {
                 Keypress(GW::UI::ControlAction_Screenshot, GW::UI::GetParentFrame(frame));
             });
         }
+        bool IsLoadingScreenShown()
+        {
+            return GW::UI::GetFrameByLabel(L"Mission") != nullptr;
+        }
     }
 
     namespace PlayerMgr {

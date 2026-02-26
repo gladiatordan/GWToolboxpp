@@ -166,6 +166,7 @@ namespace GW {
         bool BelongsToFrame(GW::UI::Frame* parent, GW::UI::Frame* child);
 
         void Screenshot();
+        bool IsLoadingScreenShown();
     } // namespace UI
     namespace PlayerMgr {
         bool IsMelandrusAccord();
