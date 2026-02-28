@@ -74,6 +74,7 @@
 #include <Windows/TargetInfoWindow.h>
 #include <Windows/GWMarketWindow.h>
 #include <Windows/InventorySorting.h>
+#include <Windows/GWAMMSCWindow.h>
 
 #include <Widgets/TimerWidget.h>
 #include <Widgets/HealthWidget.h>
@@ -215,7 +216,8 @@ namespace {
         TargetInfoWindow::Instance(),
         DropTrackerWindow::Instance(),
         GWMarketWindow::Instance(),
-        InventorySorting::Instance()
+        InventorySorting::Instance(),
+        GWAMMSCWindow::Instance()
     };
 
     bool modules_sorted = false;
