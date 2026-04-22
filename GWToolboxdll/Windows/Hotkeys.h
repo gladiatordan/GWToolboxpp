@@ -446,3 +446,28 @@ public:
     int Description(char* buf, size_t bufsz) override;
     void Execute() override;
 };
+
+class HotkeyLiveSplit : public TBHotkey {
+    enum Action : int {
+        StartSplit,
+        Reset,
+        Undo,
+        Skip,
+        Pause,
+        Count
+    } action = StartSplit;
+
+    static const char* action_names[];
+    static const char* action_cmds[];
+
+public:
+    static const char* IniSection() { return "LiveSplit"; }
+    [[nodiscard]] const char* Name() const override { return IniSection(); }
+    HotkeyLiveSplit(const ToolboxIni* ini, const char* section);
+
+    void Save(ToolboxIni* ini, const char* section) const override;
+
+    bool Draw() override;
+    int Description(char* buf, size_t bufsz) override;
+    void Execute() override;
+};

@@ -461,6 +461,12 @@ void HotkeysWindow::Draw(IDirect3DDevice9*)
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("Change behavior of your pet");
             }
+            if (ImGui::Selectable("Livesplit Action")) {
+                new_hotkey = new HotkeyLiveSplit(nullptr, nullptr);
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Send a command to the LiveSplit Server plugin.");
+            }
             ImGui::EndPopup();
             if (new_hotkey) {
                 hotkeys.push_back(new_hotkey);

@@ -1,4 +1,7 @@
 #include "stdafx.h"
+#include <WinSock2.h>
+#include <WS2tcpip.h>
+#include <thread>
 
 #include <GWCA/Constants/Constants.h>
 #include <GWCA/Constants/Maps.h>
@@ -144,6 +147,9 @@ TBHotkey* TBHotkey::HotkeyFactory(ToolboxIni* ini, const char* section)
     }
     if (type == HotkeyCommandPet::IniSection()) {
         return new HotkeyCommandPet(ini, section);
+    }
+    if (type == HotkeyLiveSplit::IniSection()) {
+        return new HotkeyLiveSplit(ini, section);
     }
     return nullptr;
 }
@@ -2069,4 +2075,58 @@ void HotkeyCommandPet::Execute()
             GW::PartyMgr::SetPetBehavior(pet.owner_agent_id, behavior);
         }
     });
+}
+
+const char* HotkeyLiveSplit::action_names[] = {"Start / Split", "Reset", "Undo Split", "Skip Split", "Pause"};
+const char* HotkeyLiveSplit::action_cmds[] = {"startorsplit\r\n", "reset\r\n", "unsplit\r\n", "skipsplit\r\n", "pause\r\n"};
+
+HotkeyLiveSplit::HotkeyLiveSplit(const ToolboxIni* ini, const char* section) : TBHotkey(ini, section)
+{
+    if (ini) {
+        action = static_cast<Action>(ini->GetLongValue(section, "ActionID", StartSplit));
+    }
+}
+
+void HotkeyLiveSplit::Save(ToolboxIni* ini, const char* section) const
+{
+    TBHotkey::Save(ini, section);
+    ini->SetLongValue(section, "ActionID", action);
+}
+
+int HotkeyLiveSplit::Description(char* buf, const size_t bufsz)
+{
+    return snprintf(buf, bufsz, "LiveSplit: %s", action_names[action]);
+}
+
+bool HotkeyLiveSplit::Draw()
+{
+    bool changed = false;
+    if (ImGui::Combo("Action###combo", (int*)&action, action_names, Count)) {
+        changed = true;
+    }
+    return changed;
+}
+
+void HotkeyLiveSplit::Execute()
+{
+    if (!CanUse()) return;
+
+    // Grab the command string locally so we can pass it safely to use detached thread
+    std::string cmd = action_cmds[action];
+
+    // fire and forget thread to prevent freezing GW if LiveSplit isn't open
+    std::thread([cmd]() {
+        SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        if (s == INVALID_SOCKET) return;
+
+        sockaddr_in server;
+        server.sin_family = AF_INET;
+        server.sin_port = htons(16834);
+        inet_pton(AF_INET, "127.0.0.1", &server.sin_addr);
+
+        if (connect(s, (struct sockaddr*)&server, sizeof(server)) == 0) {
+            send(s, cmd.c_str(), (int)cmd.length(), 0);
+        }
+        closesocket(s);
+    }).detach();
 }
