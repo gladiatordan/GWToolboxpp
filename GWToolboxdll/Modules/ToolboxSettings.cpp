@@ -95,6 +95,7 @@
 #include <Widgets/MissionMapWidget.h>
 #include <Widgets/InventoryOverlayWidget.h>
 #include <Widgets/TitleTrackerWidget.h>
+#include <Widgets/HeartbeatWidget.h>
 #include "ToolboxSettings.h"
 
 
@@ -185,6 +186,7 @@ namespace {
         LatencyWidget::Instance(),
         SkillMonitorWidget::Instance(),
         MissionMapWidget::Instance(),
+        HeartbeatWidget::Instance(),
 #if _DEBUG
         InventoryOverlayWidget::Instance(),
 #endif
